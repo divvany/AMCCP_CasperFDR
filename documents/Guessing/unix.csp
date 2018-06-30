@@ -1,0 +1,910 @@
+-- CSP script produced using Casper version 2.0
+
+-- -- Needham Schroeder Public Key Protocol, 3 message version
+-- 
+-- #Free variables
+-- 
+-- a : Agent
+-- s : Server
+-- passwd : Agent x Server -> Password
+-- PK : Agent -> PublicKey
+-- SK : Agent -> SecretKey
+-- pka : PublicKey
+-- ska : SecretKey
+-- InverseKeys = (PK, SK), (passwd,passwd), (pka,ska)
+-- 
+-- #Processes
+-- 
+-- INITIATOR(a,s) knows  passwd(a,s)
+-- SERVER(s) knows PK, SK(a), passwd(a,s)
+-- 
+-- #Protocol description
+-- 
+-- 1.  a -> s : a
+-- 2.  s -> a : PK(a) % pka, {SK(a) % ska}{passwd(a,s)}
+-- 3.  a -> s : {a}{ska % SK(a)}
+-- -- The last message is necessary to make SK(a) recognised as a key
+-- 
+-- #Specification
+-- 
+-- -- FAIL
+-- Secret(a, passwd(a,s), [s])
+-- -- FAIL
+-- Secret(s, passwd(a,s), [a])
+-- 
+-- #Actual variables
+-- 
+-- Alice, Bob, Mallory : Agent
+-- Sam : Server
+-- 
+-- #Functions
+-- 
+-- symbolic PK, SK, passwd
+-- 
+-- #System
+-- 
+-- INITIATOR(Alice, Sam)
+-- SERVER(Sam)
+-- 
+-- #Intruder Information
+-- 
+-- Intruder = Mallory
+-- IntruderKnowledge = {Alice, Bob, Mallory, PK, SK(Mallory), passwd(Mallory, Sam)}
+-- 
+-- -- FAIL
+-- Guessable = Password
+
+-- ************************************************************************
+-- *                                Types                                 *
+-- ************************************************************************
+
+-- Main datatype, representing all possible messages
+
+datatype Encryption =
+  Alice | Bob | Mallory | Sam | Garbage | passwd__.(Agent, Server) | 
+  PK__.Agent | SK__.Agent | Sq.Seq(Encryption) | 
+  Encrypt.(ALL_KEYS,Seq(Encryption)) | Hash.(HashFunction, Seq(Encryption)) | 
+  Xor.(Encryption, Encryption)
+
+-- All keys and hashfunctions in the system
+
+ALL_KEYS :: {Encryption}
+ALL_KEYS = Union({SecretKey, Password})
+
+ASYMMETRIC_KEYS = {k_, inverse(k_) | k_ <- ALL_KEYS, k_!=inverse(k_)}
+HashFunction :: {Encryption}
+HashFunction = {}
+
+-- All atoms in the system
+
+ATOM = {Alice, Bob, Mallory, Sam, Garbage}
+
+-- Some standard functions
+
+channel dummyrun_
+RUN(X_) = 
+  let drun = dummyrun_ -> drun
+  within drun[[dummyrun_ <- x_ | x_ <- X_]]
+
+encrypt(m_,k_) = Encrypt.(k_,m_)
+decrypt(Encrypt.(k1_,m_),k_) = if k_ == inverse(k1_) then m_ else <Garbage>
+decrypt(_,_) = <Garbage>
+decryptable(Encrypt.(k1_,m_),k_) = k_ == inverse(k1_) 
+decryptable(_,_) = false
+nth(ms_,n_) = if n_ == 1 then head(ms_) else nth(tail(ms_), n_ - 1)
+
+-- add Garbage to a set that contains and encryption,
+-- hash function application of Vernam encryption
+
+addGarbage_(S_) =
+  if S_=={} then {Garbage}
+  else Union({S_, {Garbage | Encrypt._ <- S_}, 
+             {Garbage | Hash._ <- S_},
+             {Garbage | Xor._ <- S_}})
+
+-- Definitions of user supplied functions
+
+PK(arg_1_) = PK__.(arg_1_)
+SK(arg_1_) = SK__.(arg_1_)
+passwd(arg_1_, arg_2_) = passwd__.(arg_1_, arg_2_)
+
+-- Inverses of functions
+
+inverse(PK__.arg_) = SK__.arg_
+inverse(SK__.arg_) = PK__.arg_
+inverse(passwd__.arg_) = passwd__.arg_
+
+-- Types in system
+
+Agent = {Alice, Bob, Mallory}
+Server = {Sam}
+Password = 
+  {passwd(arg_1_, arg_2_) | arg_1_ <- Agent, arg_2_ <- Server}
+PublicKey = {PK(arg_1_) | arg_1_ <- Agent}
+SecretKey = {SK(arg_1_) | arg_1_ <- Agent}
+
+
+-- ************************************************************************
+-- *                               Messages                               *
+-- ************************************************************************
+
+-- Message labels
+
+datatype Labels =
+  Msg1 | Msg2 | Msg3 | Env0
+
+MSG_BODY = {ALGEBRA_M::applyRenaming(m_) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO}
+
+-- Type of principals
+
+ALL_PRINCIPALS = Union({Agent, Server})
+
+INTRUDER = Mallory
+
+HONEST = diff(ALL_PRINCIPALS, {INTRUDER})
+
+-- Channel declarations
+
+INPUT_MSG = SYSTEM_M::INPUT_MSG
+OUTPUT_MSG = SYSTEM_M::OUTPUT_MSG
+DIRECT_MSG = SYSTEM_M::DIRECT_MSG
+ENV_MSG :: {(Labels, Encryption, <Encryption>)}
+ENV_MSG = SYSTEM_M::ENV_MSG
+
+channel receive: ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_MSG
+channel send: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_MSG
+channel env : ALL_PRINCIPALS.ENV_MSG
+channel error
+channel start, close : HONEST.HONEST_ROLE
+
+channel leak : addGarbage_(ALL_SECRETS)
+-- Roles of agents
+
+datatype ROLE = INITIATOR_role | SERVER_role
+
+HONEST_ROLE = ROLE
+
+-- Secrets in the protocol
+
+ALL_SECRETS_0 = Password
+ALL_SECRETS = addGarbage_(ALGEBRA_M::applyRenamingToSet(ALL_SECRETS_0))
+
+-- Define type of signals, and declare signal channel
+
+datatype Signal = 
+  Claim_Secret.ALL_PRINCIPALS.ALL_SECRETS.Set(ALL_PRINCIPALS)
+
+channel signal : Signal
+
+Fact_1 = 
+  Union({
+    {Garbage},
+    Agent,
+    Server,
+    PublicKey,
+    SecretKey,
+    Password,
+    {Encrypt.(passwd__.(a, s), <ska>) |
+       a <- Agent, s <- Server, ska <- addGarbage_(SecretKey)},
+    {Sq.<a, s> |
+       a <- Agent, s <- Server},
+    {Encrypt.(passwd__.(a, s), <SK__.(a)>) |
+       a <- Agent, s <- Server},
+    {Encrypt.(ska, <a>) |
+       a <- Agent, ska <- addGarbage_(SecretKey)},
+    {Encrypt.(SK__.(a), <a>) |
+       a <- Agent}
+  })
+
+external relational_inverse_image
+external relational_image
+transparent chase
+transparent sbisim
+
+-- ************************************************************************
+-- *                            Honest Agents                             *
+-- ************************************************************************
+
+module SYSTEM_M
+
+  -- types of messages sent and received by agents, as they are
+  -- considered by those agents
+
+  input_proj((l_,m_,se_,re_)) = (l_,m_,re_)
+  rmb_input_proj((l_,m_,se_,re_)) = ALGEBRA_M::rmb((l_,m_,re_))
+  output_proj((l_,m_,se_,re_)) = (l_,m_,se_)
+
+  INPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  INPUT_INT_MSG = 
+    Union({INPUT_INT_MSG1, INPUT_INT_MSG2, INPUT_INT_MSG3})
+
+  OUTPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  OUTPUT_INT_MSG = 
+    Union({OUTPUT_INT_MSG1, OUTPUT_INT_MSG2, OUTPUT_INT_MSG3})
+
+  -- INITIATOR
+
+  INITIATOR_0(a, s) =
+    output.a.s.(Msg1, a,<>) ->
+    [] pka : addGarbage_(PublicKey) @ [] ska : addGarbage_(SecretKey) @ 
+      input.s.a.(Msg2, Sq.<pka, Encrypt.(passwd__.(a, s), <ska>)>,<>) ->
+    output.a.s.(Msg3, Encrypt.(ska, <a>),<>) ->
+    SKIP
+
+  INITIATOR_1(a, s) = INITIATOR_0(a, s)
+
+  INITIATOR(a, s) =
+    INITIATOR_1(a, s)
+      [[input.s.a.(l_,m_,re_) <- receive.s.a.ALGEBRA_M::rmb((l_,m_,re_)) |
+          s <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+      [[output.a.s.(l_,m_,se_) <- send.a.s.ALGEBRA_M::rmb((l_,m_,se_)) |
+          s <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[output.a.s.(l_,m_,se_) <- send.a.s.ALGEBRA_M::rmb((l_,m_,se_)) |
+          s <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+
+  -- SERVER
+
+  SERVER_0(s) =
+    [] a : Agent @ input.a.s.(Msg1, a,<>) ->
+    output.s.a.(Msg2, Sq.<PK__.(a), Encrypt.(passwd__.(a, s), <SK__.(a)>)>,<>) ->
+    input.a.s.(Msg3, Encrypt.(SK__.(a), <a>),<>) ->
+    SKIP
+
+  SERVER_1(s) = SERVER_0(s)
+
+  SERVER(s) =
+    SERVER_1(s)
+      [[input.a.s.(l_,m_,re_) <- receive.a.s.ALGEBRA_M::rmb((l_,m_,re_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[input.a.s.(l_,m_,re_) <- receive.a.s.ALGEBRA_M::rmb((l_,m_,re_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+      [[output.s.a.(l_,m_,se_) <- send.s.a.ALGEBRA_M::rmb((l_,m_,se_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+
+  -- Process representing Alice
+
+  Alpha_INITIATOR_Alice = 
+    Union({
+      {|send.Alice.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG1|},
+      {|send.Alice.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG3|},
+      {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2|}
+    })
+
+  INITIATOR_Alice = (INITIATOR(Alice, Sam) ; STOP)
+
+  Alpha_Alice = 
+    Union({
+      {|env.Alice|},
+      {|send.Alice.A_ | A_ <- ALL_PRINCIPALS|},
+      {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2|}
+    })
+
+  AGENT_Alice =
+    (INITIATOR_Alice [Alpha_INITIATOR_Alice || {} ] STOP)
+
+  -- Process representing Bob
+
+  Alpha_Bob = 
+    Union({
+      {|env.Bob|},
+      {|send.Bob.A_ | A_ <- ALL_PRINCIPALS|}
+    })
+
+  AGENT_Bob = STOP
+
+  -- Process representing Sam
+
+  Alpha_SERVER_Sam = 
+    Union({
+      {|send.Sam.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG2|},
+      {|receive.A_.Sam.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|receive.A_.Sam.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|}
+    })
+
+  SERVER_Sam = (SERVER(Sam) ; STOP)
+
+  Alpha_Sam = 
+    Union({
+      {|env.Sam|},
+      {|send.Sam.A_ | A_ <- ALL_PRINCIPALS|},
+      {|receive.A_.Sam.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|receive.A_.Sam.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|}
+    })
+
+  AGENT_Sam =
+    (SERVER_Sam [Alpha_SERVER_Sam || {} ] STOP)
+
+exports
+
+  -- Messages as they appear on the network; each messages is renamed
+  -- (by rmb) to the representative member of its equivalence class
+
+  INPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG1}
+  INPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG2}
+  INPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG3}
+
+  OUTPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG1}
+  OUTPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG2}
+  OUTPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG3}
+
+  DIRECT_MSG1 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO1}
+  DIRECT_MSG2 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO2}
+  DIRECT_MSG3 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO3}
+
+  -- Environmental messages
+
+
+
+  ENV_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG = {(Env0, Garbage, <>)}
+  -- information about messages sent and received by agents, including
+  -- extras fields for both agents
+
+  INT_MSG_INFO1 = 
+    {(Msg1, a, <>, <>) |
+       a <- Agent}
+  INT_MSG_INFO2 = 
+    {(Msg2, Sq.<pka, Encrypt.(passwd__.(a, s), <ska>)>, <>, <>) |
+       a <- Agent, s <- Server, pka <- addGarbage_(PublicKey), 
+       ska <- addGarbage_(SecretKey)}
+  INT_MSG_INFO3 = 
+    {(Msg3, Encrypt.(ska, <a>), <>, <>) |
+       a <- Agent, ska <- addGarbage_(SecretKey)}
+
+  ENV_MSG = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG}
+
+  INT_MSG_INFO :: {(Labels, Encryption, <Encryption>, <Encryption>)}
+  INT_MSG_INFO = Union({INT_MSG_INFO1, INT_MSG_INFO2, INT_MSG_INFO3})
+  INPUT_INT_MSG1 = { input_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  INPUT_INT_MSG2 = { input_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  INPUT_INT_MSG3 = { input_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+
+  INPUT_MSG = Union({INPUT_MSG1, INPUT_MSG2, INPUT_MSG3})
+  OUTPUT_INT_MSG1 = { output_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  OUTPUT_INT_MSG2 = { output_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  OUTPUT_INT_MSG3 = { output_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+
+  OUTPUT_MSG = Union({OUTPUT_MSG1, OUTPUT_MSG2, OUTPUT_MSG3})
+  DIRECT_MSG = Union({DIRECT_MSG1, DIRECT_MSG2, DIRECT_MSG3})
+
+  channel input:ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_INT_MSG
+  channel output: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_INT_MSG
+  channel env_I : ALL_PRINCIPALS.ENV_INT_MSG
+
+  -- Complete system
+
+  SYSTEM_0 =
+    (AGENT_Alice
+      [Alpha_Alice||union(Alpha_Bob, Alpha_Sam)]
+    (AGENT_Bob
+      [Alpha_Bob||Alpha_Sam]
+    AGENT_Sam))
+
+endmodule
+
+-- ************************************************************************
+-- *                               Algebra                                *
+-- ************************************************************************
+
+module ALGEBRA_M
+
+  -- Algebraic laws, defined as a set of pairs
+
+  laws = {(Garbage, Garbage)}
+
+  -- Calculate transitive closure of algebraic laws, and select
+  -- representative member of each equivalence class
+
+  external mtransclose
+  renaming = mtransclose(laws, Fact_1)
+  ren = relational_inverse_image(renaming)
+
+  -- function that renames non-sequential fact to representative member
+
+  applyRenaming0(a_) =
+    let S_ = ren(a_)
+    within if card(S_)==0 then a_ else elsing(S_)
+
+  elsing({x_}) = x_
+
+  domain = {a_ | (_,a_) <- renaming}
+
+exports
+
+  -- function that renames arbitrary fact to representative member
+
+  applyRenaming(Sq.ms_) =
+    if member(Sq.ms_, Fact_1) then applyRenaming0(Sq.ms_) 
+    else Sq.<applyRenaming0(m_) | m_ <- ms_>
+  applyRenaming(a_) = applyRenaming0(a_)
+
+  -- function that renames (label, fact, extras) triples
+
+  rmb((l_,m_,extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(extras_))
+  rmb4((l_,m_,s_extras_,r_extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(s_extras_), 
+     applyRenamingToSeq(r_extras_))
+
+  -- lift renaming to sets and to deductions
+
+  applyRenamingToSet(X_) =
+    union({elsing(ren(a_)) | a_ <- inter(X_,domain)},  diff(X_, domain))
+
+  applyRenamingToSeq(X_) = <applyRenaming(e_) | e_ <- X_>
+
+  applyRenamingToDeductions(S_) =
+    {(applyRenaming0(f_), l_, applyRenamingToSet(X_)) | (f_,l_,X_) <- S_}
+
+endmodule
+
+-- ************************************************************************
+-- *                             The Intruder                             *
+-- ************************************************************************
+
+module INTRUDER_M
+
+  -- Guessable values
+
+  Guessable0 = Password
+  Guessable = diff(Guessable0, IK1)
+
+  -- Intruder's deductions
+
+  unSq_ (Sq.ms_) = set(ms_)
+  unSq_ (m_) = {m_}
+
+  unknown_(S_) = diff(S_, IK0)
+
+  Base_Deductions_ =
+    Union({SqDeductions, UnSqDeductions, 
+           EncryptionDeductions, DecryptionDeductions,
+           VernEncDeductions, VernDecDeductions, 
+           FnAppDeductions, HashDeductions})
+
+  SqDeductions =
+    {(Sq.fs_, SeqD, set(fs_)) | Sq.fs_ <- Fact_1}
+
+  UnSqDeductions =
+    {(nth(fs_,i_), UnSeq.i_, {Sq.fs_}) | 
+       Sq.fs_ <- Fact_1, i_ <- {1..#fs_}}
+
+  EncryptionDeductions =
+    {(Encrypt.(k_,fs_), Enc, union({k_}, set(fs_))) | 
+        Encrypt.(k_,fs_) <- Fact_1}
+
+  DecryptionDeductions =
+    {(nth(fs_,i_), Dec.i_, {Encrypt.(k_,fs_), inverse(k_)}) |
+        Encrypt.(k_,fs_) <- Fact_1, k_!=Garbage, i_ <- {1..#fs_}}
+
+  VernEncDeductions =
+    {(Xor.(m1_,m2_), VernEnc, union(unSq_(m1_), unSq_(m2_))) | 
+        Xor.(m1_,m2_) <- Fact_1}
+
+  VernDecDeductions =
+      {(m11_, VernDec, union(unSq_(m2_), {Xor.(m1_,m2_)})) | 
+         Xor.(m1_,m2_) <- Fact_1, m11_ <- unSq_(m1_)}
+
+  HashDeductions =   {(Hash.(f_, ms_), HashD, set(ms_)) | Hash.(f_, ms_) <- Fact_1}
+
+  FnAppDeductions = 
+    {(PK__.arg_1_, FnApp, unknown_({arg_1_})) |
+        PK__.arg_1_ <- Fact_1}
+
+  -- close up intruder's initial knowledge under deductions;
+  -- calculate which facts cannot be learnt
+
+  components_(Sq.ms_) = 
+    if member(Sq.ms_, Fact_1) then {Sq.ms_} else set(ms_)
+  components_(m_) = {m_}
+
+  Seeable_ = 
+    Union({unknown_(components_(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO})
+
+  Close_(IK_, ded_, fact_) =
+    let IK1_ = 
+          union(IK_, {f_ | (f_,l_,fs_) <- ded_, fs_ <= IK_})
+        ded1_ = 
+          {(f_,l_,fs_) | (f_,l_,fs_) <- ded_, fs_ <= fact_}
+        fact1_ = Union({IK_, {f_ | (f_,l_,fs_) <- ded_},
+                       Seeable_, Guessable0})
+    within
+    if card(IK_)==card(IK1_) and card(ded_)==card(ded1_)
+       and card(fact_)==card(fact1_)
+    then (IK_, {(f_,l_,fs_) | (f_,l_,fs_) <- ded_, not(fs_ <= IK_)}, fact_)
+    else Close_(IK1_, ded1_, fact1_)
+
+  (IK1, Deductions_, KnowableFact_) = 
+    Close_(ALGEBRA_M::applyRenamingToSet(IK0), 
+           ALGEBRA_M::applyRenamingToDeductions(Base_Deductions), 
+           ALGEBRA_M::applyRenamingToSet(Fact_1))
+
+  LearnableFact = diff(KnowableFact, IK1)
+
+  -- Undoing deductions
+
+  undoes(Encrypt.(k_,fs_), Enc, f1s_) = 
+    {ded | ded@@(f_, Dec.i_, ffs_) <- Deductions, 
+           ffs_ == {Encrypt.(k_,fs_), inverse(k_)}} 
+  undoes(f_, Dec.i_, f1s_) = 
+    {ded | ded@@(Encrypt.(k_,fs_), Enc, ffs_) <- Deductions, 
+           f1s_ == {Encrypt.(k_,fs_), inverse(k_)}} 
+  undoes(Sq.fs_, SeqD, f1s_) =
+    {ded | ded@@(f_, UnSeq.i, ffs_) <- Deductions, 
+           ffs_ == {Sq.fs_}}
+  undoes(f_, UnSeq.i, f1s_) = 
+    {ded | ded@@(fs_, Seq.i_, ffs_) <- Deductions, 
+           f1s_ == {fs_}} 
+  undoes(Xor.(m1_,m2_), VernEnc, f1s_) =
+    {ded | ded@@(f_, VernDec, ffs_) <- Deductions, 
+           ffs_ == {Xor.(m1_,m2_),m1_} or ffs_ == {Xor.(m1_,m2_),m2_}} 
+  undoes(f_, VernDec, f1s_) =
+    union(
+      {ded | ded@@(Xor.(m1_,m2_), VernEnc, ffs_) <- Deductions, 
+             f1s_=={Xor.(m1_,m2_),m1_} or f1s_=={Xor.(m1_,m2_),m2_}},
+      {ded | ded@@(f1_, VernDec, ffs_) <- Deductions,
+             f_!=f1_, union({f_},f1s_)==union({f1_},ffs_)}
+    )
+  undoes(_,FnApp,_) = {}
+  undoes(_,HashD,_) = {}
+
+  -- The intruder
+
+  -- * leak is used to signal that a possible secret has been learnt
+  -- * hear and say are used to represent hearing or saying a message
+  -- * infer(f,fs) represent deducing fact f from the set of facts fs
+
+  -- Component of intruder for currently unknown fact f_:
+  -- * ms_ is the set of messages that contain f_ at the top level
+  -- * fss_ is the set of sets of facts from which f_ can be deduced
+  -- * ds_ is the set of deductions that use f_
+
+  IGNORANT(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    ([] (l_, fs_) : fss_, not(member(f_,fs_)) @ 
+        infer.(f_,l_,fs_) -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    (member(f_,Guessable) & guess.f_ -> KNOWS''(f_,ms_,fss_,ds_))
+    []
+    guess?g_:diff(Guessable,{f_}) -> IGNORANT'(f_,ms_,fss_,ds_)
+
+  -- Component for currently unknown fact f_, after a guess
+
+  IGNORANT'(f_,ms_,fss_,ds_) = 
+    ([] (l_,fs_) : fss_, not(member(f_,fs_)) @
+      infer.(f_,l_,fs_) -> 
+      if member(f_,ASYMMETRIC_KEYS) and member(inverse(f_), KnowableFact)
+      then ([] g_ : Guessable @ 
+              verify.(f_,g_) -> vsync.g_ -> KNOWS(f_,ms_,fss_,ds_))
+           []
+           notVerify.f_ -> KNOWS'(f_,ms_,fss_,ds_)
+      else KNOWS'(f_,ms_,fss_,ds_)
+    )
+    []
+    vsync?g_:diff(Guessable,{f_}) -> IGNORANT(f_,ms_,fss_,ds_)
+
+  -- Component of intruder for known fact f_
+
+  KNOWS(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    say?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    [] 
+    ([] ded@@(f1_,l_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    -- The following is required because if it is not then a deduction deducing a
+    -- fact we already know may be allowed by the DEDUCTION process during the
+    -- guessing phase which would allow it to be used as a verifier that a
+    -- guess is correct.
+    ([] (l_,fs_) : fss_ @ infer.(f_,l_,fs_) -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    guess?g_ -> KNOWS'(f_,ms_,fss_,ds_)
+
+  -- Component for known fact f_ after guess
+
+  KNOWS'(f_,ms_,fss_,ds_) =
+    infer?(f1_,l_,fs_) : ds_ -> KNOWS'(f_,ms_,fss_,ds_)
+    []
+    ([] (l_,fs_) : fss_ @ 
+        infer.(f_,l_,fs_) -> [] g_ : Guessable @ verify.(f_,g_) -> 
+        vsync.g_ -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    vsync?g_:diff(Guessable,{f_}) -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    member(f_,ASYMMETRIC_KEYS) and member(inverse(f_), KnowableFact) &
+      ([] g_ : Guessable @ 
+         verify.(inverse(f_),g_) -> vsync.g_ -> KNOWS(f_,ms_,fss_,ds_))
+
+  -- Component for guessed fact f_
+
+  KNOWS''(f_,ms_,fss_,ds_) =
+    ([] (f1_,l_,fs_) : ds_, f_!=f1_ @
+           infer.(f1_,l_,fs_) -> KNOWS''(f_,ms_,fss_,ds_))
+    []
+    ([] (l_,fs_) : fss_ @ 
+        infer.(f_,l_,fs_) -> verify.(f_,f_) -> 
+        vsync!f_ -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    ([] ff_:diff(KnowableFact,{f_}) @ verify.(ff_,f_) -> 
+      vsync!f_ -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    vsync?g_:diff(Guessable,{f_}) -> KNOWS(f_,ms_,fss_,ds_)
+
+  -- Alphabet of this component
+
+  AlphaL(f_,ms_,fss_,ds_) =
+    Union({(if member(f_,ALL_SECRETS) then {leak.f_} else {}),
+           {hear.m_, say.m_ | m_ <- ms_},
+           {infer.(f_,l_,fs_) | (l_,fs_) <- fss_},
+           {infer.(f1_,l_,fs_) | (f1_,l_,fs_) <- ds_},
+           {|guess|},
+           if member(f_,Guessable)
+             then {verify.(ff_,f_) | ff_ <- KnowableFact}
+             else {},
+           {|verify.(f_,f1_) | f1_ <- Guessable|},
+           if member(f_,ASYMMETRIC_KEYS) and member(inverse(f_), KnowableFact)
+             then union({notVerify.f_}, 
+                        {verify.(inverse(f_),f1_) | f1_ <- Guessable})
+             else {},
+           {|vsync|}
+         })
+
+  -- Set of all (f_, ms_, fss_, ds_) for which intruder components 
+  -- must be built
+
+  f_ms_fss_ds_s = 
+    let rid_ = relational_image({(f_,(l_,fs_)) | (f_,l_,fs_) <- Deductions})
+        msf_ = relational_image({(f_, m_) | m_ <- MSG_BODY, f_ <- unSq_(m_)})
+        xsf_ = relational_image({(f_, x_) | x_@@(_,l_,fs_) <- Deductions,
+                                            f_ <- fs_})
+    within {(f_, msf_(f_), rid_(f_), xsf_(f_)) | f_ <- KnowableFact}
+
+  -- Processes to control deductions
+
+  DEDUCTION(f_,l_,fs_) =
+    infer.(f_,l_,fs_) -> STOP
+    []
+    [] (fa_,la_,fsa_) : undoes(f_,l_,fs_) @
+         infer.(fa_,la_,fsa_) -> DEDUCTION(f_,l_,fs_)
+
+  alphaDEDUCTION(f_,l_,fs_) =
+    Union({{infer.(f_,l_,fs_)}, 
+          {infer.(fa_,la_,fsa_) | (fa_,la_,fsa_) <- undoes(f_,l_,fs_)}         })
+
+  -- Put components together in parallel ...
+
+  INTRUDER_00 = 
+    (|| (f_,ms_,fss_,ds_) : f_ms_fss_ds_s @ 
+         [AlphaL(f_,ms_,fss_,ds_)]
+           if member(f_,IK1) then KNOWS(f_,ms_,fss_,ds_)
+           else IGNORANT(f_,ms_,fss_,ds_)
+    )
+    [| {| infer |} |]
+    (|| (f_,l_,fs_) : Deductions' @ 
+         [alphaDEDUCTION(f_,l_,fs_)] DEDUCTION(f_,l_,fs_))
+
+  -- Rename events appropriately
+
+  BUILD_INTRUDER_0(INTRUDER_0) =
+    ((chase(INTRUDER_0)
+      [[ hear.m_ <- hear.m_, hear.m_ <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| hear |}|] STOP)
+      [[ say.m_ <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| say |}|] STOP)
+
+  -- Add in facts that are known initially
+
+  SAY_KNOWN_0 = 
+    (inter(IK1, ALL_SECRETS) != {} & dummy_leak -> SAY_KNOWN_0) 
+    [] dummy_send -> SAY_KNOWN_0 
+    [] dummy_receive -> SAY_KNOWN_0 
+
+  SAY_KNOWN =
+    SAY_KNOWN_0
+      [[ dummy_leak <- leak.f_ | f_ <- inter(IK1, ALL_SECRETS) ]]
+      [[ dummy_send <- dummy_send, dummy_send <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), components_(m_) <= IK1, 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+      [[ dummy_receive <- dummy_receive, dummy_receive <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), components_(m_) <= IK1, 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+
+  STOP_SET = { dummy_send, dummy_receive }
+
+exports
+
+  -- Types of sender and receiver of each message
+
+  SenderType (Msg1) = Agent
+  SenderType (Msg2) = Server
+  SenderType (Msg3) = Agent
+
+  ReceiverType(Msg1) = Server
+  ReceiverType(Msg2) = Agent
+  ReceiverType(Msg3) = Server
+
+  -- Intruder's initial knowledge
+
+  IK0 = {Alice, Bob, Mallory, SK__.(Mallory), passwd__.(Mallory, Sam), 
+             Garbage}
+
+  Deductions = Deductions_
+
+  Base_Deductions = Base_Deductions_
+
+KnowableFact = KnowableFact_ 
+  INTRUDER_0 = INTRUDER_00 \ {|infer, vsync|}
+
+  -- Set of all deductions that could occur
+  COMBINED_DEDUCTIONS =
+    let ds_ = INTRUDER_M::Deductions
+    within -- Don't you hate hacks like this (FDR does not allow empty channel types)?
+      if ds_ == {} then {(Garbage, HashD, {Garbage})} else ds_
+
+  -- Declare channels:
+  channel hear, say : MSG_BODY
+  channel dummy_leak, dummy_send, dummy_receive
+  datatype DedLabel = Enc | Dec.Int | SeqD | UnSeq.Int | 
+                      VernEnc | VernDec | HashD | FnApp 
+
+  channel guess : Guessable
+  channel verify : (KnowableFact,Guessable)
+  channel vsync : Guessable
+  channel notVerify : ASYMMETRIC_KEYS
+
+  -- Complete intruder
+
+  BUILD_INTRUDER(INTRUDER_0) =
+    BUILD_INTRUDER_0(INTRUDER_0) [| STOP_SET |] STOP
+
+endmodule
+
+-- FDR bug: cannot have a module prefix in a channel type
+Deductions' = INTRUDER_M::COMBINED_DEDUCTIONS
+channel infer : Deductions'
+
+IntruderInterface = 
+  Union({
+    {| receive.Mallory.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::INPUT_MSG1,
+      SYSTEM_M::INPUT_MSG2,
+      SYSTEM_M::INPUT_MSG3
+    }) |},
+    {| send.A_.Mallory.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::OUTPUT_MSG1,
+      SYSTEM_M::OUTPUT_MSG2,
+      SYSTEM_M::OUTPUT_MSG3
+    }) |}
+  })
+
+SYSTEM = 
+  SYSTEM_M::SYSTEM_0 [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER(INTRUDER_M::INTRUDER_0)
+
+-- ************************************************************************
+-- *                    Specifications and Assertions                     *
+-- ************************************************************************
+
+module SECRET_M
+
+  -- Specification for single secret
+
+  SECRET_SPEC_0(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ ->
+      (if member(Mallory, Bs_) then SECRET_SPEC_0(s_)
+       else SECRET_SPEC_1(s_))
+    []
+    leak.s_ -> SECRET_SPEC_0(s_)
+  SECRET_SPEC_1(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ -> SECRET_SPEC_1(s_)
+  -- Specification for all secrets
+
+  AlphaS(s_) = 
+    Union({
+      {|signal.Claim_Secret.A_.s_ | A_ <- ALL_PRINCIPALS|},
+      {leak.s_}
+    })
+  -- Sequential version; secs_ is secrets that intruder must not learn
+
+  SEQ_SECRET_SPEC_0(secs_) =
+    scs?s_!IntIn -> SEQ_SECRET_SPEC_0(secs_)
+    []
+    card(secs_)<2 & scs?s_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(union(secs_,{s_}))
+    []
+    card(secs_)==2 & scs?s_:secs_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(secs_)
+    []
+    leak?s_ : diff(ALL_SECRETS,secs_) -> SEQ_SECRET_SPEC_0(secs_)
+
+  isIntIn(S_) = if member(Mallory,S_) then IntIn else IntNotIn
+
+  Alpha_SECRETS =
+    Union({
+      {|leak, signal.Claim_Secret.A_ | A_ <- HONEST|}
+    })
+
+  Alpha_SEQ_SECRETS = 
+    Union({
+      {|leak, scs|}
+    })
+
+exports
+
+  SECRET_SPEC = (|| s_ : ALL_SECRETS @ [AlphaS(s_)] SECRET_SPEC_0(s_))
+
+  datatype IncInt = IntIn | IntNotIn
+
+  channel scs : ALL_SECRETS.IncInt
+
+  SEQ_SECRET_SPEC = SEQ_SECRET_SPEC_0({})
+
+  -- System for secrecy checking
+
+  SYSTEM_S = 
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        Server_renamed_ = ALGEBRA_M::applyRenamingToSet(Server)
+    within
+    SYSTEM
+      [[send.a.s.ALGEBRA_M::rmb((Msg3, Encrypt.(ska, <a>), <>))
+          <- signal.Claim_Secret.a.ALGEBRA_M::applyRenaming(passwd__.(a, s)).{s}, 
+        receive.a.s.ALGEBRA_M::rmb((Msg3, Encrypt.(SK__.(a), <a>), <>))
+          <- signal.Claim_Secret.s.ALGEBRA_M::applyRenaming(passwd__.(a, s)).{a} |
+            ska <- ALGEBRA_M::applyRenamingToSet(addGarbage_(SecretKey)), 
+            a <- Agent_renamed_, s <- Server_renamed_
+      ]] \ {| env, send, receive, INTRUDER_M::guess, INTRUDER_M::verify |}
+
+  SYSTEM_S_SEQ =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        Server_renamed_ = ALGEBRA_M::applyRenamingToSet(Server)
+    within
+    SYSTEM
+      [[send.a.s.ALGEBRA_M::rmb((Msg3, Encrypt.(ska, <a>), <>))
+          <- scs.ALGEBRA_M::applyRenaming(passwd__.(a, s)).isIntIn({a, s}), 
+        receive.a.s.ALGEBRA_M::rmb((Msg3, Encrypt.(SK__.(a), <a>), <>))
+          <- scs.ALGEBRA_M::applyRenaming(passwd__.(a, s)).isIntIn({s, a}) |
+            ska <- ALGEBRA_M::applyRenamingToSet(addGarbage_(SecretKey)), 
+            a <- Agent_renamed_, s <- Server_renamed_
+      ]] \ {| env, send, receive, INTRUDER_M::guess, INTRUDER_M::verify |}
+
+endmodule
+
+-- Assertion of secrecy
+
+assert SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S
+assert SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ
+
+
+
+assert STOP [T= SYSTEM \ diff(Events,{|INTRUDER_M::verify|})
+

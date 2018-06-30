@@ -1,0 +1,80 @@
+-- Simple e-commerce protocol
+
+#Free variables
+
+c, m  : Agent
+b : Bank
+order : Order
+price : Price
+result : Result
+k : Key
+InverseKeys = (k,k)
+
+#Processes
+
+CUSTOMER(c)
+MERCHANT(m)
+BANK(b)
+
+#Protocol description
+
+0.   -> c : m, b, order, price
+[c!=m]
+1. c -> m : b, order, price
+1a. m -> b : c, price
+2. c -> b : m, price
+2a.  -> b : result
+3. b -> m : result
+--3a. m -> c : result
+4. b -> c : result
+
+#Channels
+
+authenticated
+secret
+-- direct
+
+#Specification
+
+-- PASS
+Agreement(c, m, [b, order, price])
+-- PASS
+Agreement(b, m, [c, price, result])
+-- PASS
+Agreement(c, b, [m, price])
+-- PASS
+Agreement(b, c, [m, price, result])
+-- PASS
+Agreement(m, c, [b, order, price])
+-- PASS
+Agreement(m, b, [c, price])
+-- Agreement(m, b, [c, price, result])
+-- FAIL
+Secret(c, order, [m])
+-- FAIL
+Secret(m, order, [c])
+
+-- Following two not allowed by casper
+
+#Actual variables
+
+C, M, I  : Agent
+B : Bank
+O1, O2 : Order
+P1, P2 : Price
+Yes, No : Result
+K : Key
+InverseKeys = (K,K)
+
+#System
+
+
+CUSTOMER(C)
+MERCHANT(M)
+BANK(B)
+
+#Intruder Information
+
+Intruder = I
+IntruderKnowledge = {I, C, M, B, P1, O2}
+

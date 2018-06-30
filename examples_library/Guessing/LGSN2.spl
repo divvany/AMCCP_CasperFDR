@@ -1,0 +1,77 @@
+-- Protocol by Lomas, Gong, Saltzer, Needham, without confounders
+
+#Free variables
+
+A, B : Agent
+S : Server
+pks : PublicKey
+sks : SecretKey
+passwd : Agent -> Password
+k : SessionKey
+na1, na2, nb1, nb2 : Nonce
+ra, rb : Random
+ta, tb : TimeStamp
+InverseKeys = (pks, sks), (passwd, passwd), (k,k)
+f : HashFunction
+
+#Processes
+
+INITIATOR(A, S, pks, na1, na2, ra) knows passwd(A)
+RESPONDER(B, S, pks, nb1, nb2, rb) knows passwd(B)
+SERVER(S, sks, k) knows passwd
+
+#Protocol description
+
+0.    -> A : B
+[A != B]
+1.  A -> S : {A, B, na1, na2, {ta}{passwd(A)}}{pks}
+[A != B]
+2.  S -> B : A, B
+[A != B]
+3.  B -> S : {B, A, nb1, nb2, {tb}{passwd(B)}}{pks}
+
+4.  S -> A : {na1, k (+) na2}{passwd(A)}
+5.  S -> B : {nb1, k (+) nb2}{passwd(B)}
+
+6.  B -> A : {rb}{k}
+7.  A -> B : {f(rb),ra}{k}
+8.  B -> A : {f(ra)}{k}
+
+#Specification
+
+-- PASS
+Secret(A, k, [B,S])
+-- PASS
+Secret(B, k, [A,S])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+PKs : PublicKey
+SKs : SecretKey
+K, Km : SessionKey
+Na1, Na2, Nb1, Nb2, Nm : Nonce
+Ra, Rb, Rm : Random
+TimeStamp = 0..0
+MaxRunTime = 0
+InverseKeys = (PKs, SKs), (K,K), (Km,Km)
+
+#Functions
+
+symbolic passwd
+
+#System
+
+INITIATOR(Alice, Sam, PKs, Na1, Na2, Ra)
+RESPONDER(Bob, Sam, PKs, Nb1, Nb2, Rb)
+SERVER(Sam, SKs, K)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, PKs, passwd(Mallory), \
+                     Nm, Km, Rm}
+
+-- FAIL
+Guessable = Password

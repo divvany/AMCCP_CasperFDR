@@ -1,0 +1,50 @@
+#Free variables
+a, b : Agent
+s : Server
+na, nb : Nonce
+kab : SessionKey
+ServerKey : Agent -> ServerKeys
+InverseKeys = (kab, kab), (ServerKey, ServerKey)
+
+#Processes
+INITIATOR(a,na) knows ServerKey(a) generates na
+RESPONDER(b,s,nb) knows ServerKey(b) generates nb
+SERVER(s,kab) knows ServerKey generates kab
+
+#Protocol description
+0.    -> a : b
+1.  a -> b : na
+2.  b -> s : {a, na, nb}{ServerKey(b)}
+3a. s -> a : {b, kab, na, nb}{ServerKey(a)}
+3b. s -> b : {a, kab}{ServerKey(b)}
+4.  a -> b : {nb}{kab}
+
+#Specification
+-- PASS
+Secret(a, kab, [b,s])
+-- PASS
+Aliveness(b, a)
+-- PASS
+WeakAgreement(b, a)
+-- PASS
+NonInjectiveAgreement(b, a, [na,nb])
+--NonInjectiveAgreement(b, a, [kab])
+-- PASS
+Agreement(b, a, [na,nb])
+--Agreement(b, a, [kab])
+
+#Actual variables
+Mallory : Agent
+
+#Inline functions
+symbolic ServerKey
+
+#System
+GenerateSystem = True
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {ServerKey(Mallory)}
+
+UnboundParallel = True
+

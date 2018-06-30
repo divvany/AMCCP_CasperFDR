@@ -1,0 +1,54 @@
+-- Needham Schroeder Lowe
+
+#Free variables
+
+a, b : Agent
+na, nb : Nonce
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+InverseKeys = (PK, SK)
+
+#Processes
+
+INITIATOR(a,na) knows PK, SK(a) generates na
+RESPONDER(b,nb) knows PK, SK(b) generates nb
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> b : {na, a}{PK(b)}
+2.  b -> a : {na, nb, b}{PK(a)}
+3.  a -> b : {nb}{PK(b)} 
+
+#Specification
+
+-- PASS
+Secret(b, nb, [a])
+-- PASS
+Secret(b, na, [a])
+-- PASS
+Aliveness(a, b)
+-- PASS
+WeakAgreement(a, b)
+-- PASS
+NonInjectiveAgreement(a, b, [na, nb])
+-- PASS
+Agreement(a, b, [na,nb])
+
+#Actual variables
+Mallory : Agent
+
+#Functions
+
+symbolic PK, SK
+
+#System
+GenerateSystem = True
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {PK, SK(Mallory)}
+
+UnboundParallel = True
+

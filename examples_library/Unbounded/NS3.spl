@@ -1,0 +1,61 @@
+-- Needham Schroeder Public Key Protocol (3 Message version)
+
+#Free variables
+
+a, b : Agent
+na : Nonce [InitNonce]
+nb : Nonce [RespNonce]
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+InverseKeys = (PK, SK)
+
+#Processes
+
+INITIATOR(a,na) knows PK, SK(a) generates na
+RESPONDER(b,nb) knows PK, SK(b) generates nb
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> b : {na, a}{PK(b)}
+2.  b -> a : {na, nb}{PK(a)}
+3.  a -> b : {nb}{PK(b)} 
+
+#Specification
+
+-- FAIL
+Secret(b, nb, [a])
+-- FAIL
+Secret(b, na, [a])
+-- PASS
+Aliveness(a, b)
+-- FAIL
+WeakAgreement(a, b)
+-- FAIL
+NonInjectiveAgreement(a, b, [na,nb])
+-- FAIL
+Agreement(a, b, [na,nb])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Na1, Na2 : Nonce (InternalUnknown) [InitNonce]
+Nb1, Nb2 : Nonce (InternalUnknown) [RespNonce]
+Np : Nonce (InternalKnown)
+Ne1, Ne2 : Nonce (External)
+
+#Functions
+
+symbolic PK, SK
+
+#System
+
+RESPONDER(Bob, Ne1)
+RESPONDER(Bob, Ne2)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Np, PK, SK(Mallory)}
+
+UnboundParallel = True

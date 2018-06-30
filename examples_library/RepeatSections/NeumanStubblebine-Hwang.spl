@@ -1,0 +1,64 @@
+-- Neuman Stubblebine, simplified to reduce state space
+-- TESTS REMOVED DUE TO THE FACT THAT THEY TAKE ~12,000 seconds to check!!
+-- To restore the tests remove one of the comment marks above each test
+
+#Free variables
+
+a, b : User
+s : Server
+
+--ts : TimeStamp
+kab : SessionKey
+na, nb, ma, mb : Nonce
+SKey : User -> ServerKey
+InverseKeys = (SKey,SKey), (kab,kab)
+
+#Processes
+
+INITIATOR(a, na, ma) knows SKey(a) generates na, ma
+RESPONDER(b, s, nb, mb) knows SKey(b) generates nb, mb
+SERVER(s, kab) knows SKey generates kab
+
+#Protocol description
+
+0.   -> a : b
+1a. a -> b : a
+2. b -> s : b, {a}{SKey(b)}
+-- Split message 3
+3b. s -> a : {b, kab}{SKey(a)} 
+3c. s -> a : {a, kab}{SKey(b)} % tkt
+3d. s -> b : {a, kab}{SKey(b)}
+
+
+-- Start repeated section
+5. a -> b : ma, tkt % {a, kab}{SKey(b)}
+6. b -> a : mb, {b, ma, a}{kab}
+7. a -> b : {mb, a, b}{kab}
+
+#Specification
+-- -- PASS
+Secret(a, kab, [b, s])
+
+-- -- PASS
+NonInjectiveAgreement(b, a, [kab])
+-- -- PASS
+Agreement(b, a, [kab])
+
+#Actual variables
+
+
+Mallory : User
+
+#Functions
+
+symbolic SKey
+
+#System
+
+GenerateSystemForRepeatSection = 5 to 7
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Mallory, SKey(Mallory)}
+UnboundParallel = True

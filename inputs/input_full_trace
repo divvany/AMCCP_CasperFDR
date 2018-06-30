@@ -1,0 +1,11 @@
+interpret
+receive.Alice.Stan.(Msg1,Sq.<Alice,Bob,Ni>,<>)
+send.Stan.Alice.(Msg2,Encrypt.(SKey__.Alice,<Ni,Bob,Kab>),<>)
+send.Stan.Bob.(Msg3,Encrypt.(SKey__.Bob,<Kab,Alice>),<>)
+close.Stan.SERVER_role
+tock
+receive.Stan.Bob.(Msg3,Encrypt.(SKey__.Bob,<Kab,Alice>),<>)
+send.Bob.Alice.(Msg4,Encrypt.(Kab,<Nb>),<>)
+tock
+crack.Kab
+

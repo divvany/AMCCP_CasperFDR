@@ -1,0 +1,23 @@
+__   __ __  __  ____   ___      _________________________________________
+||   || ||  || ||  || ||__      Hugs 98: Based on the Haskell 98 standard
+||___|| ||__|| ||__||  __||     Copyright (c) 1994-2005
+||---||         ___||           World Wide Web: http://haskell.org/hugs
+||   ||                         Bugs: http://hackage.haskell.org/trac/hugs
+||   || Version: September 2006 _________________________________________
+
+Haskell 98 mode: Restart with command line option -98 to enable extensions
+
+Type :? for help
+Casper> 1. I_Alice ->  Stan   : Alice, Bob, Ni
+2.  Stan   -> I_Alice : {Ni, Bob, Kab}{SKey(Alice)}
+3.  Stan   ->  I_Bob  : {Kab, Alice}{SKey(Bob)}
+  Stan withdraws from this run as SERVER_rol
+  Time passes
+3. I_Stan  ->   Bob   : {Kab, Alice}{SKey(Bob)}
+4.   Bob   -> I_Alice : {Nb}{Kab}
+  Time passes
+  Kab has been compromised
+
+Goodbye
+
+Casper> [Leaving Hugs]

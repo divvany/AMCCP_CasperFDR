@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# A simple shell script to invoke the Haskell interpreter and load in the 
+# Casper files.
+
+# Gavin Lowe, June 1996, September 1997
+# Based on scripts by
+# Mark Jones, last modified March 1993
+# Edited by Jonathan Bowen, Oxford University, August 1993
+# Edited by Malcolm Harper for OUCL, October 1995
+
+# Location of Haskell files - site specific.  Edit to point to directory where 
+# the Hugs binary is stored
+HUGSBIN=/usr/bin
+
+# The Casper files.  Edit the following line to point to the directory where
+# the Casper files are stored, or set this environment variable in one of your
+# start-up files
+CASPERBASE=${CASPERBASE-/var/www/html/}
+
+FILES="${CASPERBASE}/Casper/Main.lhs"
+
+# next, command line argument settings. 
+HUGSARGS=${HUGSARGS-"+l -s -h2500000"}
+# If you are short on swap space, then edit the above line to reduce the 
+# size of the final argument (which controls the heap size).
+
+# The next few lines try to guess a suitable setting for the EDITLINE
+# variable.  If your favourite editor is not dealt with here, or if
+# the version of sh that I'm using is incompatible with every other
+# shell out there, you may need to modify (or remove) this section:
+#
+EDIT=${VISUAL-${EDITOR-/usr/bin/vi}}
+case `basename $EDIT` in
+    emacs | vi | elvis )  EDITLINE="$EDIT +%d %s"; export EDITLINE ;;
+    none               )  ;;
+    *                  )  EDITLINE=$EDIT; export EDITLINE ;;
+esac
+
+# Finally, start the interpreter running:
+if [ -x "$HUGSBIN/hugs" ]; then
+  exec $HUGSBIN/hugs $HUGSARGS +p"Casper> " $FILES
+else
+  echo "$0: binary file $HUGSBIN not found"
+  exit 1
+fi

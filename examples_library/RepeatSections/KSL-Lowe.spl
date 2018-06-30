@@ -1,0 +1,67 @@
+-- KSL protocol, slightly simplified.
+
+#Free variables
+
+u : User
+s : Server
+as : AuthenticationServer
+
+ts : TimeStamp
+kab : SessionKey
+na, nb, ma : Nonce
+SKey : Server -> ServerKey
+UKey : User -> UserKey
+InverseKeys = (SKey,SKey), (kab,kab), (UKey,UKey)
+
+#Processes
+
+USER(u, ma, na) knows UKey(u) generates ma, na
+SERVER(s, nb) knows SKey(s) generates nb
+AUTHSERVER(as,kab) knows SKey, UKey generates kab
+
+#Protocol description
+
+0.   -> u : s, as
+1. u -> as : s, ma
+-- Split message 2 into two
+2a. as -> u : {ts, s, kab, ma}{UKey(u)}
+2b. as -> u : {ts, kab, u, ma}{SKey(s)} % tkt
+
+-- Start repeated section
+4a. u -> s : tkt % {ts, kab, u, ma}{SKey(s)}
+4b. u -> s : na
+5. s -> u : nb, {na, ma, u}{kab}
+6. u -> s : {s, nb}{kab}
+
+#Specification
+
+-- The following specification is used to ensure that the generated system has
+-- no overlap between InternalKnown and InternalUnknown session keys. If this
+-- was not specified an overlap would exist resulting in false attacks.
+-- PASS
+Secret(u, kab, [s, as])
+
+-- PASS
+NonInjectiveAgreement(s, u, [kab])
+-- PASS
+Agreement(s, u, [kab])
+
+#Actual variables
+
+TimeStamp = 0 .. 0
+MaxRunTime = 0
+Mallory : User
+
+#Functions
+
+symbolic SKey, UKey
+
+#System
+
+GenerateSystemForRepeatSection = 4a to 6
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Mallory, UKey(Mallory)}
+UnboundParallel = True

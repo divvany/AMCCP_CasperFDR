@@ -1,0 +1,64 @@
+-- Needham Schroeder Public Key Protocol, 3 message version
+
+#Free variables
+
+a, b : Agent
+na, nb : Nonce
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+InverseKeys = (PK, SK)
+
+#Processes
+
+INITIATOR(a,na) knows PK, SK(a)
+RESPONDER(b,nb) knows PK, SK(b)
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> b : {na, a}{PK(b)}
+2.  b -> a : {na, nb}{PK(a)}
+3.  a -> b : {nb}{PK(b)} 
+
+#Specification
+
+-- PASS
+StrongSecret(a, na, [b])
+-- PASS
+StrongSecret(a, nb, [b])
+-- FAIL
+Secret(b, nb, [a])
+-- FAIL
+Secret(b, na, [a])
+
+-- PASS
+Aliveness(a, b)
+-- FAIL
+WeakAgreement(a, b)
+-- FAIL
+NonInjectiveAgreement(a, b, [na, nb])
+-- FAIL
+Agreement(a, b, [na,nb])
+-- PASS
+Agreement(b, a, [na,nb])
+
+#Actual variables
+
+A, B, I : Agent
+Na, Nb, Nm : Nonce
+
+#Functions
+
+symbolic PK, SK
+
+#System
+
+INITIATOR(A, Na)
+RESPONDER(B, Nb)
+-- WithdrawOption = True
+
+#Intruder Information
+
+Intruder = I
+IntruderKnowledge = {A, B, I, Nm, PK, SK(I)}
+

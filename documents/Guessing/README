@@ -1,0 +1,10 @@
+LGSN1: basic protocol; no attack
+LGSN2: no confounders; attack
+LGSN3: basic protocol; replay attack on initiator
+LGSN4: basic protocol; replay attack on responder
+LGSN5: version using nonces; no attack
+eke: normal EKE; no attack
+eke1: EKE with public key replaced by symmetric key; guessing attack
+unix.spl: guessing attack
+
+Most attacks as in my paper

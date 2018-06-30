@@ -1,0 +1,74 @@
+-- SPLICE Protocol, without timestamps
+-- Test for using decryptable etc etc
+
+#Free variables
+
+A, B : Agent
+n1, n2, n3 : Nonce
+pka, pkb : PublicKey
+S: Server
+ts : TimeStamp
+
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+SPK : Server -> ServerPublicKey
+SSK : Server -> ServerSecretKey
+
+InverseKeys = (PK, SK), (SPK, SSK)
+
+#Processes
+
+INITIATOR(A,S,n1,n2) knows SK(A), SPK
+RESPONDER(B,S,n3) knows SK(B), SPK
+SERVER(S) knows PK, SSK(S)
+
+#Protocol description
+
+0.    -> A : B
+[A != B]
+1.  A -> S : B, n1 
+2.  S -> A : {S, A, n1, PK(B) % pkb}{SSK(S)}
+3.  A -> B : {A, ts, {n2}{pkb % PK(B)}}{SK(A)} % v
+[A != B]
+4.  B -> S : A, n3
+5.  S -> B : {S, B, n3, PK(A) % pka}{SSK(S)}
+[decryptable(v, pka) and nth(decrypt(v,pka), 1) == A and \
+  nth(decrypt(v,pka), 2) == (Timestamp.now) and \
+  decryptable(nth(decrypt(v,pka), 3), SK(B))]
+<n2 := nth (decrypt (nth(decrypt(v,pka), 3), SK(B)), 1)>
+6.  B -> A : {B, n2}{pka % PK(A)}
+
+#Specification
+
+-- FAIL
+Secret(A, n2, [B])
+-- FAIL
+Secret(B, n2, [A])
+-- FAIL
+Agreement(A, B, [n2])
+-- FAIL
+Agreement(B, A, [n2])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Na, Np : Nonce
+Sam : Server
+TimeStamp =  0..1
+MaxRunTime = 0
+
+#Inline functions
+
+symbolic PK, SK, SPK, SSK
+
+#System
+
+INITIATOR(Alice, Sam, Np, Na)
+RESPONDER(Bob, Sam, Np)
+SERVER(Sam)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, PK, SPK, SK(Mallory)}
+

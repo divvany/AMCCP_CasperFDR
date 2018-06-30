@@ -1,0 +1,55 @@
+-- Needham Schroeder Shared Key Protocol, using ECB
+
+#Free variables
+
+a, b : Agent
+s: Server
+na, nb : Nonce
+kab : SessionKey
+SKey : Agent -> ServerKey
+InverseKeys = (SKey, SKey), (kab, kab)
+f : HashFunction
+
+#Processes
+
+INITIATOR(a,s,na) knows SKey(a)
+RESPONDER(b,nb) knows SKey(b)
+SERVER(s, kab) knows SKey
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> s : a, b, na
+[a != b]
+2.  s -> a : {na, b, kab, {kab, a}{SKey(b)} % enc}{SKey(a)}
+3.  a -> b : enc % {kab, a}{SKey(b)}
+4.  b -> a : {nb}{kab}
+5.  a -> b : {nb}{kab}
+
+#Specification
+
+-- PASS
+Secret(a, kab, [b])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+N1, N2 : Nonce
+K1, K2 : SessionKey
+InverseKeys = (K1, K1), (K2, K2)
+
+#Functions
+
+symbolic SKey
+
+#System
+
+INITIATOR(Alice, Sam, N1)
+RESPONDER(Bob, N2)
+SERVER(Sam, K1)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, K2, SKey(Mallory)}

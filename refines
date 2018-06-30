@@ -1,0 +1,16 @@
+#!/bin/sh
+##it will be integrated to maintain the fdr license
+
+
+mkdir -p "$HOME"/.config/fdr
+
+
+docker run -it --rm \
+    -e HOME="$HOME" \
+    -u $(id -u):$(id -g) \
+    -v "$HOME"/.config/fdr:"$HOME"/.config/fdr \
+    -v "$PWD":"$PWD" \
+    -w "$PWD" \
+    dcreager/fdr \
+    /usr/bin/refines \
+    "$@"

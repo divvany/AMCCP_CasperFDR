@@ -1,0 +1,55 @@
+-- Simple example using Electronic Code Book chaining
+
+#Free variables
+
+a, b : Agent
+s : Server
+k : SessionKey
+SKey : Agent -> ServerKey
+InverseKeys = (SKey, SKey)
+
+#Processes
+
+INITIATOR(a,s,k) knows SKey(a)
+RESPONDER(b) knows SKey(b)
+SERVER(s) knows SKey
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> s : {b, k}{SKey(a)}
+[a != b]
+2.  s -> b : {k, a}{SKey(b)}
+
+#Specification
+
+-- PASS
+Secret(a, k, [b])
+-- PASS
+Secret(b, k, [a])
+
+#Equivalences
+
+forall m1, m2 : Message; k  . {m1, m2}{k} = {m1}{k}, {m2}{k}
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+K1, K2 : SessionKey
+
+#Functions
+
+symbolic SKey
+
+#System
+
+INITIATOR(Alice, Sam, K1)
+INITIATOR(Alice, Sam, K2)
+-- RESPONDER(Bob)
+SERVER(Sam)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, SKey(Mallory)}

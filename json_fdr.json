@@ -1,0 +1,41 @@
+{
+  "copyright_notice": "FDR Version 4.2.3 copyright 2016 Oxford University Innovation Ltd. All Rights Reserved.",
+  "license_type": "Academic license for non-commercial use only",
+  "results": [
+    {
+      "assertion_string": "AUTH1_M::AuthenticateINITIATORToRESPONDERTimedAgreement2\n    [T= AUTH1_M::SYSTEM_1",
+      "errors": [],
+      "is_negated": 0,
+      "result": 1,
+      "visited_states": 194,
+      "visited_transitions": 636,
+      "visited_plys": 10,
+      "counterexamples": []
+    },
+    {
+      "assertion_string": "AUTH2_M::AuthenticateINITIATORToRESPONDERAgreement\n    [T= AUTH2_M::SYSTEM_2",
+      "errors": [],
+      "is_negated": 0,
+      "result": 1,
+      "visited_states": 194,
+      "visited_transitions": 636,
+      "visited_plys": 10,
+      "counterexamples": []
+    },
+    {
+      "assertion_string": "AUTH3_M::AuthenticateRESPONDERToINITIATORAgreement\n    [T= AUTH3_M::SYSTEM_3",
+      "errors": [],
+      "is_negated": 0,
+      "result": 1,
+      "visited_states": 196,
+      "visited_transitions": 640,
+      "visited_plys": 10,
+      "counterexamples": []
+    }
+  ],
+  "print_statement_results": [],
+  "file_name": ".\/documents\/file.csp",
+  "event_map": {},
+  "warnings": [],
+  "errors": []
+}

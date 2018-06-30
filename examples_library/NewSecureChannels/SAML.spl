@@ -1,0 +1,85 @@
+-- SAML Single Sign On (SSO) protocol
+
+#Free variables
+u : User
+sp : ServiceProvider
+idp : IdProvider
+m : Message
+nidp : Nonce
+a : Artifact
+
+PK : IdProvider -> PublicKey
+SK : IdProvider -> SecretKey
+
+InverseKeys = (PK, SK)
+
+#Protocol description
+0.     -> u   : sp, idp
+
+-- Request for a resource: I am 'u', I want to access 'sp'
+1. u   -> idp : u, sp
+
+-- <AuthnResponse>
+2. idp -> u   : a, idp, sp, u
+3. u   -> sp  : a, sp, idp, u
+4. sp  -> idp : a, u, sp, idp
+5. idp -> sp  : {u, sp, idp, nidp}{SK(idp)}
+6. sp  -> u   : m
+
+#Processes
+USER(u) knows PK
+SERVICEPROVIDER(sp, m) knows PK
+IDPROVIDER(idp, a, nidp) knows PK, SK(idp)
+
+#Channels
+Session symmetric 1,2
+Session symmetric 3,6
+Session symmetric 4,5
+
+1 C NF NRA- NR-
+2 C NF NRA- NR-
+3 C NR-
+4 C NF NRA- NR-
+5 C NF NRA- NR-
+6 C NF NRA- NR-
+
+#Specification
+-- PASS
+Secret(sp, m, [u])
+-- PASS
+Secret(u, m, [sp])
+
+-- PASS
+Agreement(sp, idp, [u, a])
+-- PASS
+Agreement(idp, sp, [u, a, nidp])
+-- PASS
+Agreement(sp, u, [m, idp])
+-- PASS
+Agreement(u, sp, [idp])
+-- The test below fails because a dishonest sp can just not check with the
+-- idp and just send message 6.
+-- FAIL
+Agreement(idp, u, [sp])
+-- PASS
+Agreement(u, idp, [sp])
+
+#Actual variables
+Alice, Mallory : User
+Dustin, Mallory : ServiceProvider
+Sam : IdProvider
+M, M', Mm : Message
+A, A', Am : Artifact
+Nidp, Nidp', Nm : Nonce
+
+#Functions
+symbolic PK, SK
+
+#System
+USER(Alice); USER(Alice)
+SERVICEPROVIDER(Dustin, M); SERVICEPROVIDER(Dustin, M')
+IDPROVIDER(Sam, A, Nidp); IDPROVIDER(Sam, A', Nidp')
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {Alice, Dustin, Mallory, Sam, Am, Nm, Mm, PK}

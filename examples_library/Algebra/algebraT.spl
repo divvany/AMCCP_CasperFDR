@@ -1,0 +1,60 @@
+-- A protocol Bill came up with to illustrate the use of algebra,
+-- adapted to include timestamps
+
+#Free variables
+
+a,b : Agent
+kab : SessionKey
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+InverseKeys = (PK, SK)
+ta, tb : TimeStamp
+
+#Processes
+
+INITIATOR(a,kab) knows PK, SK(a)
+RESPONDER(b) knows PK, SK(b)
+
+#Protocol description
+
+0.    -> a : b
+[a != b]
+1.  a -> b : {{a, kab, ta}{PK(b)}}{SK(a)}
+[a != b and ta==now]
+2.  b -> a : {{b, kab, tb}{PK(a)}}{SK(b)}
+
+#Specification
+
+-- FAIL
+Secret(b, kab, [a])
+-- FAIL
+TimedAgreement(a, b, 0, [kab])
+
+#Actual variables
+
+A, B, M : Agent
+K1, K2 : SessionKey
+TimeStamp = 0..1
+MaxRunTime=0
+
+#Functions 
+
+symbolic PK, SK
+
+#System
+
+INITIATOR(A, K1)
+RESPONDER(B)
+
+#Intruder Information
+
+Intruder = M
+IntruderKnowledge = {A, B, M, PK, K2, SK(M)}
+
+#Equivalences
+
+-- This is the interesting bit.  The following specifies that RSA encryption 
+-- is commutative
+
+forall k1, k2, m . {{m}{k1}}{k2} = {{m}{k2}}{k1} 
+

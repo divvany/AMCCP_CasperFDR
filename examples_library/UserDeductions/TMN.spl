@@ -1,0 +1,52 @@
+-- TMN protocol
+
+#Free variables
+A, B : Agent
+S : Server
+pks : PublicKey
+sks : SecretKey
+ka, kb : SessionKey
+InverseKeys = (pks, sks)
+
+#Processes
+INITIATOR(A,S,pks,ka) 
+RESPONDER(B,S,pks,kb) 
+SERVER(S,sks)
+
+#Protocol description
+0.    -> A : B
+[A != B]
+1.  A -> S : B, {ka}{pks}
+[A != B]
+2.  S -> B : A
+[A != B]
+3.  B -> S : A, {kb}{pks}
+4.  S -> A : kb (+) ka
+
+#Specification
+-- FAIL
+Secret(A, ka, [B,S])
+-- FAIL
+Secret(A, kb, [B,S])
+-- FAIL
+Secret(B, kb, [A,S])
+
+
+#Actual variables
+Alice, Bob, Mallory : Agent
+Sam : Server
+PKs : PublicKey
+SKs : SecretKey
+Ka, Kb, Km : SessionKey
+InverseKeys = (PKs, SKs)
+
+#System
+INITIATOR(Alice, Sam, PKs, Ka)
+RESPONDER(Bob, Sam, PKs, Kb)
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, PKs, Km}
+
+forall k1, k2: SessionKey; pks : PublicKey . \
+    {k1}{pks}, {k2}{pks} |- k1 (+) k2

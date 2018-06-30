@@ -1,0 +1,76 @@
+-- -- Needham Schroeder Conventional Key Protocol
+ 
+#Free variables
+ 
+A, B   : Agent
+S      : Server
+na, nb : Nonce
+SKey   : Agent -> ServerKey
+kab   : SessionKey
+
+InverseKeys = (SKey,SKey), (kab,kab)
+
+#Processes
+
+INITIATOR(A,S,na) knows SKey(A) 
+RESPONDER(B,nb) knows SKey(B) 
+SERVER(S,kab) knows SKey
+
+#Protocol description
+
+0.   -> A : B
+[A != B]
+1. A -> S : A, B, na
+2. S -> A : {na, B, kab}{SKey(A)} 
+3. S -> B : {kab,A}{SKey(B)}
+[A != B]
+4. B -> A : {nb}{kab}
+[A != B]
+5. A -> B : {nb,nb}{kab}
+
+#Specification
+
+-- The attacks below are essentially all the same; the initiator starts a
+-- session with the server, which issues kab and then terminates.
+-- The intruder does not pass on message 2 or 3 (depending on which property
+-- is being tested). Then, tocks occur until kab is cracked. Then the intruder
+-- is bale to fake messages 4 and 5 as he wishes.
+
+-- TimedAgreement(B, A, 1, [])
+-- PASS
+Agreement(B, A, [])
+-- FAIL
+Agreement(A, B, [])
+-- FAIL
+Secret(A, kab, [B])
+-- FAIL
+Secret(B, kab, [A])
+
+#Actual variables
+
+Alice, Bob, Ivor  : Agent
+Stan              : Server
+Na, Nb, Ni        : Nonce
+Kab               : SessionKey
+MaxRunTime = 0
+
+InverseKeys = (Kab,Kab)
+
+#Inline functions
+
+symbolic SKey
+
+#System 
+
+INITIATOR(Alice, Stan, Na)
+RESPONDER(Bob, Nb)
+SERVER(Stan,Kab)
+
+WithdrawOption = True
+
+#Intruder Information
+
+Intruder = Ivor
+IntruderKnowledge = {Alice, Bob, Ivor, Stan, Ni, SKey(Ivor)}
+Crackable = SessionKey (2)
+

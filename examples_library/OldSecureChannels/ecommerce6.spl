@@ -1,0 +1,84 @@
+-- Simple e-commerce protocol
+-- CSP edited by hand
+#Free variables
+
+c, m  : Agent
+b : Bank
+sn : SeqNo
+order : Order
+price : Price
+result : Result
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+BPK : Bank -> BankPublicKey
+BSK : Bank -> BankSecretKey
+InverseKeys = (PK,SK), (BPK, BSK)
+
+#Processes
+
+CUSTOMER(c,sn) knows SK(c), BPK
+MERCHANT(m)
+BANK(b) knows PK, BSK(b)
+
+#Protocol description
+
+0.   -> c : m, b, order, price
+[c!=m]
+1. c -> m : b, order, price, {b, price, sn}{SK(c)}%sig
+2. m -> b : c, price, sig%{b, price, sn}{SK(c)}
+[m!=c]
+2a.  -> b : result
+3. b -> m : result, {c, result, sn}{BSK(b)}%bsig
+4. m -> c : result, bsig%{c, result, sn}{BSK(b)}
+
+#Channels
+
+authenticated
+secret
+-- direct
+
+#Specification
+
+-- PASS
+Agreement(c, m, [b, order, price])
+-- PASS
+Agreement(b, m, [c, price, result])
+-- FAIL
+Agreement(c, b, [m, price])
+-- PASS
+Agreement(b, c, [m, price, result])
+-- FAIL
+Secret(c, order, [m])
+-- FAIL
+Secret(m, order, [c])
+-- PASS
+Agreement(m, c, [b, order, price])
+-- PASS
+Agreement(m, b, [c, price])
+
+#Functions
+
+symbolic PK, SK, BPK, BSK
+
+#Actual variables
+
+C, M, I  : Agent
+B : Bank
+O : Order
+P : Price
+SN1, SN2 : SeqNo
+Yes, No : Result
+
+#System
+
+CUSTOMER(C, SN1)
+CUSTOMER(C, SN2)
+MERCHANT(M)
+BANK(B)
+BANK(B)
+
+#Intruder Information
+
+Intruder = I
+IntruderKnowledge = {I, C, M, B, O, P, Yes, No, PK, SK(I), SN1, SN2}
+

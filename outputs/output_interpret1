@@ -1,0 +1,19 @@
+__   __ __  __  ____   ___      _________________________________________
+||   || ||  || ||  || ||__      Hugs 98: Based on the Haskell 98 standard
+||___|| ||__|| ||__||  __||     Copyright (c) 1994-2005
+||---||         ___||           World Wide Web: http://haskell.org/hugs
+||   ||                         Bugs: http://hackage.haskell.org/trac/hugs
+||   || Version: September 2006 _________________________________________
+
+Haskell 98 mode: Restart with command line option -98 to enable extensions
+
+Type :? for help
+Casper>   Stan withdraws from this run as SERVER_rol
+  Time passes
+  Time passes
+  Kab has been compromised
+  Bob believes he has completed a run of the protocol, taking role RESPONDER, with Alice, using data items 
+
+Goodbye
+
+Casper> [Leaving Hugs]

@@ -1,0 +1,43 @@
+-- Woo and Lam Pi f
+-- http://www.lsv.ens-cachan.fr/Software/spore/wooLamPif.html
+
+# Free variables
+a, b : Agent
+s :	Server
+SKey : Agent -> ServerKey
+nb : nonce
+
+InverseKeys = (SKey,SKey)
+
+# Processes
+INITIATOR(a) knows SKey(a)
+RESPONDER(b,s,nb) knows SKey(b) generates nb
+SERVER(s) knows SKey
+
+# Protocol description
+0.   -> a : b
+1. a -> b : a
+2. b -> a : nb
+3. a -> b : {a, b, nb}{SKey(a)} % enc
+4. b -> s : {a, b, nb, enc % {a, b, nb}{SKey(a)}}{SKey(b)}
+5. s -> b : {a, b, nb}{SKey(b)}
+
+#Specification
+-- PASS
+Agreement(a, b, [])
+
+#Actual variables
+Mallory : Agent
+
+#Inline functions
+symbolic SKey
+
+#System
+GenerateSystem = True
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {SKey(Mallory)}
+
+UnboundParallel = True
+

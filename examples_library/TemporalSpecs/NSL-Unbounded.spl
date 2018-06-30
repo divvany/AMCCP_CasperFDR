@@ -1,0 +1,66 @@
+-- Needham Schroeder Lowe
+
+#Free variables
+
+a, b : Agent
+na : Nonce [InitNonce]
+nb : Nonce [RespNonce]
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+InverseKeys = (PK, SK)
+
+#Processes
+
+INITIATOR(a,na) knows PK, SK(a) generates na
+RESPONDER(b,nb) knows PK, SK(b) generates nb
+
+#Protocol description
+
+0.    -> a : b
+1.  a -> b : {na, a}{PK(b)}
+2.  b -> a : {na, nb, b}{PK(a)}
+3.  a -> b : {nb}{PK(b)} 
+
+#Specification
+
+-- PASS
+if Bob receives message 3 from Alice containing Ne1 for nb then
+    (previously Bob sends message 2 containing Ne1 for nb) and
+        (previously Alice sends message 3 containing Ne1 for nb)
+    
+-- PASS
+if Bob receives message 3 from a containing Nb1 for nb then
+    previously Bob sends message 2 to a containing na, Ne1 for nb 
+
+-- PASS
+if Bob receives message 3 from a containing Ne1 for nb then
+    previously a sends message 3 to Bob containing Ne1 for nb
+
+
+-- PASS
+if Bob receives message 3 from Mallory containing Ne1 for nb then
+    previously Mallory sends message 3 to Bob containing Ne1 for nb
+    
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Na1, Na2 : Nonce (InternalUnknown) [InitNonce]
+Nb1, Nb2 : Nonce (InternalUnknown) [RespNonce]
+Np : Nonce (InternalKnown)
+Ne1, Ne2 : Nonce (External)
+
+#Functions
+
+symbolic PK, SK
+
+#System
+
+RESPONDER(Bob, Ne1)
+RESPONDER(Bob, Ne2)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Np, PK, SK(Mallory)}
+
+UnboundParallel = True

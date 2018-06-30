@@ -1,0 +1,60 @@
+-- Denning Saco
+
+#Free variables
+
+A, B : Agent
+S : Server
+SKey : Agent -> ServerKey
+kab : SessionKey
+ts : TimeStamp
+InverseKeys = (SKey, SKey), (kab,kab)
+
+#Processes
+
+INITIATOR(A,S) knows SKey(A)
+RESPONDER(B) knows SKey(B)
+SERVER(S,kab) knows SKey generates kab
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> S : A, B
+2.  S -> A : {kab, B, ts, {kab, A, ts}{SKey(B)}%v}{SKey(A)}
+[ts==now or ts==now-1]
+3.  A -> B : v%{kab, A, ts}{SKey(B)}
+[ts==now or ts==now-1]
+
+#Specification
+
+-- PASS
+Secret(B,kab,[A])
+-- PASS
+TimedNonInjectiveAgreement(A,B,1,[])
+-- PASS
+NonInjectiveAgreement(A,B,[kab])
+-- FAIL
+TimedAgreement(A,B,1,[])
+-- FAIL
+Agreement(A,B,[kab])
+
+#Actual variables
+
+Mallory : Agent
+
+TimeStamp = 0 .. 2
+MaxRunTime = 1
+
+#Inline functions
+
+symbolic SKey
+
+#System
+
+GenerateSystem = True
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {SKey(Mallory), Mallory}
+
+UnboundParallel = True

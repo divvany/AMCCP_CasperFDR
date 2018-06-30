@@ -1,0 +1,56 @@
+-- Yahalom with identities not protected (or removed)
+
+#Free variables
+a, b : Agent
+s : Server
+na, nb : Nonce
+kab : SessionKey
+ServerKey : Agent -> ServerKeys
+InverseKeys = (kab, kab), (ServerKey, ServerKey)
+
+#Processes
+INITIATOR(a,na) knows ServerKey(a)
+RESPONDER(b,s,nb) knows ServerKey(b) 
+SERVER(s,kab) knows ServerKey
+
+#Protocol description
+0.    -> a : b
+1.  a -> b : na
+2.  b -> s : a, {na, nb}{ServerKey(b)}
+3a. s -> a : {kab, na, nb}{ServerKey(a)}
+3b. s -> b : {kab}{ServerKey(b)}
+4.  a -> b : {nb}{kab}
+
+#Specification
+-- FAIL
+Secret(b, kab, [a,s])
+-- FAIL
+Aliveness(a, b)
+-- FAIL
+WeakAgreement(a, b)
+-- FAIL
+NonInjectiveAgreement(a, b, [kab,na,nb])
+-- FAIL
+Agreement(a, b, [kab,na,nb])
+
+#Actual variables
+Alice, Bob, Mallory : Agent
+Sam : Server
+Kab : SessionKey
+Na : Nonce
+Nb : Nonce
+Nm : Nonce
+InverseKeys = (Kab, Kab)
+
+#Inline functions
+symbolic ServerKey
+
+#System
+INITIATOR(Alice, Na)
+RESPONDER(Bob, Sam, Nb)
+SERVER(Sam, Kab)
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, Nm, ServerKey(Mallory)}
+

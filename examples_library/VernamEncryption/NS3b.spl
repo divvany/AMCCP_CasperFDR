@@ -1,0 +1,54 @@
+-- Needham Schroeder Public Key Protocol, 3 message version
+
+#Free variables
+
+A, B : Agent
+na, nb : Nonce
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+--ts : TimeStamp
+-- g : Nonce x Nonce -> Strange
+InverseKeys = (PK, SK)
+-- f : HashFunction
+
+#Processes
+
+INITIATOR(A,na) knows PK, SK(A)
+RESPONDER(B,nb) knows PK, SK(B)
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> B : {na, A}{PK(B)}
+[A != B]
+2.  B -> A : {nb(+)na, nb}{PK(A)}
+3.  A -> B : {nb}{PK(B)} 
+
+#Specification
+
+-- FAIL
+Secret(A, na, [B])
+-- FAIL
+Secret(B, nb, [A])
+-- FAIL
+Agreement(A,B,[na,nb])
+-- PASS
+Agreement(B,A,[na,nb])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Na, Nb, Nm : Nonce
+#Functions
+
+symbolic PK, SK
+
+#System
+
+INITIATOR(Alice, Na)
+RESPONDER(Bob, Nb)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Nm, PK, SK(Mallory)}

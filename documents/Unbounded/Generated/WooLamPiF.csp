@@ -1,0 +1,1078 @@
+-- CSP script produced using Casper version 2.0
+
+-- -- Woo and Lam Pi f
+-- -- http://www.lsv.ens-cachan.fr/Software/spore/wooLamPif.html
+-- 
+-- # Free variables
+-- a, b : Agent
+-- s :	Server
+-- SKey : Agent -> ServerKey
+-- nb : nonce
+-- 
+-- InverseKeys = (SKey,SKey)
+-- 
+-- # Processes
+-- INITIATOR(a) knows SKey(a)
+-- RESPONDER(b,s,nb) knows SKey(b) generates nb
+-- SERVER(s) knows SKey
+-- 
+-- # Protocol description
+-- 0.   -> a : b
+-- 1. a -> b : a
+-- 2. b -> a : nb
+-- 3. a -> b : {a, b, nb}{SKey(a)} % enc
+-- 4. b -> s : {a, b, nb, enc % {a, b, nb}{SKey(a)}}{SKey(b)}
+-- 5. s -> b : {a, b, nb}{SKey(b)}
+-- 
+-- #Specification
+-- -- PASS
+-- Agreement(a, b, [])
+-- 
+-- #Actual variables
+-- Mallory : Agent
+-- 
+-- #Inline functions
+-- symbolic SKey
+-- 
+-- #System
+-- GenerateSystem = True
+-- 
+-- #Intruder Information
+-- Intruder = Mallory
+-- IntruderKnowledge = {SKey(Mallory)}
+-- 
+-- UnboundParallel = True
+-- 
+
+-- ************************************************************************
+-- *                                Types                                 *
+-- ************************************************************************
+
+-- Main datatype, representing all possible messages
+
+datatype Encryption =
+  Alice | Bob | nonce_P | nb_E1 | nb_E2 | Mallory | Garbage | SKey__.Agent | 
+  Sq.Seq(Encryption) | Encrypt.(ALL_KEYS,Seq(Encryption)) | 
+  Hash.(HashFunction, Seq(Encryption)) | Xor.(Encryption, Encryption) | 
+  Sent.(Encryption, Seq(Encryption)) | 
+  AuthTaggedSignals1.AUTH1_M__TaggedSignals1
+
+-- Some indirection to get around FDR parsing bugs with :: in datatype declarations
+AUTH1_M__TaggedSignals1 = AUTH1_M::TaggedSignals1
+
+-- All keys and hashfunctions in the system
+
+ALL_KEYS :: {Encryption}
+ALL_KEYS = ServerKey
+
+ASYMMETRIC_KEYS = {k_, inverse(k_) | k_ <- ALL_KEYS, k_!=inverse(k_)}
+HashFunction :: {Encryption}
+HashFunction = {}
+
+-- All atoms in the system
+
+ATOM = {Alice, Bob, nonce_P, nb_E1, nb_E2, Mallory, Garbage}
+
+-- Some standard functions
+
+channel dummyrun_
+RUN(X_) = 
+  let drun = dummyrun_ -> drun
+  within drun[[dummyrun_ <- x_ | x_ <- X_]]
+
+encrypt(m_,k_) = Encrypt.(k_,m_)
+decrypt(Encrypt.(k1_,m_),k_) = if k_ == inverse(k1_) then m_ else <Garbage>
+decrypt(_,_) = <Garbage>
+decryptable(Encrypt.(k1_,m_),k_) = k_ == inverse(k1_) 
+decryptable(_,_) = false
+nth(ms_,n_) = if n_ == 1 then head(ms_) else nth(tail(ms_), n_ - 1)
+
+-- add Garbage to a set that contains and encryption,
+-- hash function application of Vernam encryption
+
+addGarbage_(S_) =
+  if S_=={} then {Garbage}
+  else Union({S_, {Garbage | Encrypt._ <- S_}, 
+             {Garbage | Hash._ <- S_},
+             {Garbage | Xor._ <- S_}})
+
+-- Definitions of user supplied functions
+
+SKey(arg_1_) = SKey__.(arg_1_)
+
+-- Inverses of functions
+
+inverse(SKey__.arg_) = SKey__.arg_
+
+-- Types in system
+
+Agent = {Alice, Bob, Mallory}
+Server = {Alice}
+nonce = {nonce_P, nonce_P, nb_E1, nb_E2}
+ServerKey = {SKey(arg_1_) | arg_1_ <- Agent}
+
+
+-- ************************************************************************
+-- *                               Messages                               *
+-- ************************************************************************
+
+-- Message labels
+
+datatype Labels =
+  Msg1 | Msg2 | Msg3 | Msg4 | Msg5 | Env0
+
+MSG_BODY = {ALGEBRA_M::applyRenaming(m_) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO}
+
+-- Type of principals
+
+ALL_PRINCIPALS = Union({Agent, Server})
+
+INTRUDER = Mallory
+
+HONEST = diff(ALL_PRINCIPALS, {INTRUDER})
+
+-- Channel declarations
+
+INPUT_MSG = SYSTEM_M::INPUT_MSG
+OUTPUT_MSG = SYSTEM_M::OUTPUT_MSG
+DIRECT_MSG = SYSTEM_M::DIRECT_MSG
+ENV_MSG :: {(Labels, Encryption, <Encryption>)}
+ENV_MSG = SYSTEM_M::ENV_MSG
+
+channel receive: ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_MSG
+channel send: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_MSG
+channel env : ALL_PRINCIPALS.ENV_MSG
+channel error
+channel start, close : HONEST.HONEST_ROLE
+
+channel leak : addGarbage_(ALL_SECRETS)
+-- Roles of agents
+
+datatype ROLE = INITIATOR_role | RESPONDER_role | SERVER_role
+
+HONEST_ROLE = ROLE
+
+-- Secrets in the protocol
+
+ALL_SECRETS_0 = {}
+ALL_SECRETS = addGarbage_(ALGEBRA_M::applyRenamingToSet(ALL_SECRETS_0))
+
+-- Define type of signals, and declare signal channel
+
+datatype Signal = 
+  Claim_Secret.ALL_PRINCIPALS.ALL_SECRETS.Set(ALL_PRINCIPALS) |
+  Running1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  Commit1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  RunCom1.ALL_PRINCIPALS.ALL_PRINCIPALS
+
+channel signal : Signal
+
+Fact_1 = 
+  Union({
+    {Garbage},
+    Agent,
+    Server,
+    nonce,
+    ServerKey,
+    {Encrypt.(SKey__.(a), <a, b, nb>) |
+       a <- Agent, b <- Agent, nb <- nonce},
+    {Encrypt.(SKey__.(b), <a, b, nb, enc>) |
+       a <- Agent, b <- Agent, nb <- nonce, 
+       enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})},
+    {Encrypt.(SKey__.(b), <a, b, nb, Encrypt.(SKey__.(a), <a, b, nb>)>) |
+       a <- Agent, b <- Agent, nb <- nonce},
+    {Encrypt.(SKey__.(b), <a, b, nb>) |
+       a <- Agent, b <- Agent, nb <- nonce},
+    {Sent.(a, <a, b>) |
+       a <- Agent, b <- Agent},
+    {Sent.(nb, <b, a, nb>) |
+       a <- Agent, b <- Agent, nb <- nonce},
+    {Sent.(enc, <a, b, nb>) |
+       a <- Agent, b <- Agent, nb <- nonce, 
+       enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})},
+    {Sent.(Encrypt.(SKey__.(b), <a, b, nb, enc>), <b, s, a, nb, enc>) |
+       a <- Agent, b <- Agent, nb <- nonce, s <- Server, 
+       enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})},
+    {Sent.(Encrypt.(SKey__.(b), <a, b, nb>), <s, b, a, nb>) |
+       a <- Agent, b <- Agent, nb <- nonce, s <- Server},
+    { sm_ | (sm_,_) <- INTRUDER_M::All_External_and_Internal_Deductions}
+  })
+
+external relational_inverse_image
+external relational_image
+transparent chase
+transparent sbisim
+
+-- ************************************************************************
+-- *                            Honest Agents                             *
+-- ************************************************************************
+
+module SYSTEM_M
+
+  -- types of messages sent and received by agents, as they are
+  -- considered by those agents
+
+  input_proj((l_,m_,se_,re_)) = (l_,m_,re_)
+  rmb_input_proj((l_,m_,se_,re_)) = ALGEBRA_M::rmb((l_,m_,re_))
+  output_proj((l_,m_,se_,re_)) = (l_,m_,se_)
+
+  INPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  INPUT_INT_MSG = 
+    
+    Union({
+      INPUT_INT_MSG1,
+      INPUT_INT_MSG2,
+      INPUT_INT_MSG3,
+      INPUT_INT_MSG4,
+      INPUT_INT_MSG5
+    })
+
+  OUTPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  OUTPUT_INT_MSG = 
+    
+    Union({
+      OUTPUT_INT_MSG1,
+      OUTPUT_INT_MSG2,
+      OUTPUT_INT_MSG3,
+      OUTPUT_INT_MSG4,
+      OUTPUT_INT_MSG5
+    })
+
+  -- INITIATOR
+
+  INITIATOR_0(a) =
+    [] b : Agent @ member((Env0, b,<>), ENV_INT_MSG0) & 
+      env_I.a.(Env0, b,<>) ->
+    member((Msg1, a,<>), OUTPUT_INT_MSG1) & output.a.b.(Msg1, a,<>) ->
+    [] nb : nonce @ member((Msg2, nb,<>), INPUT_INT_MSG2) & 
+      input.b.a.(Msg2, nb,<>) ->
+    member((Msg3, Encrypt.(SKey__.(a), <a, b, nb>),<>), OUTPUT_INT_MSG3) & 
+    output.a.b.(Msg3, Encrypt.(SKey__.(a), <a, b, nb>),<>) ->
+    SKIP
+
+  INITIATOR_1(a) = INITIATOR_0(a)
+
+  INITIATOR(a) =
+    INITIATOR_1(a)
+      [[input.b.a.(l_,m_,re_) <- receive.b.a.ALGEBRA_M::rmb((l_,m_,re_)) |
+          b <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+      [[output.a.b.(l_,m_,se_) <- send.a.b.ALGEBRA_M::rmb((l_,m_,se_)) |
+          b <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[output.a.b.(l_,m_,se_) <- send.a.b.ALGEBRA_M::rmb((l_,m_,se_)) |
+          b <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+      [[env_I.a.m_ <- env.a.ALGEBRA_M::rmb(m_) |
+          m_ <- ENV_INT_MSG0]]
+
+  -- RESPONDER
+
+  RESPONDER_0(b, s, nb) =
+    [] a : Agent @ member((Msg1, a,<>), INPUT_INT_MSG1) & 
+      input.a.b.(Msg1, a,<>) ->
+    member((Msg2, nb,<>), OUTPUT_INT_MSG2) & output.b.a.(Msg2, nb,<>) ->
+    
+    [] enc : addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce}) @ 
+      member((Msg3, enc,<>), INPUT_INT_MSG3) & input.a.b.(Msg3, enc,<>) ->
+    member((Msg4, Encrypt.(SKey__.(b), <a, b, nb, enc>),<>), OUTPUT_INT_MSG4) & 
+    output.b.s.(Msg4, Encrypt.(SKey__.(b), <a, b, nb, enc>),<>) ->
+    input.s.b.(Msg5, Encrypt.(SKey__.(b), <a, b, nb>),<a>) ->
+    SKIP
+
+  RESPONDER_1(b, s, nb) = RESPONDER_0(b, s, nb)
+
+  RESPONDER(b, s, nb) =
+    RESPONDER_1(b, s, nb)
+      [[input.a.b.(l_,m_,re_) <- receive.a.b.ALGEBRA_M::rmb((l_,m_,re_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[input.a.b.(l_,m_,re_) <- receive.a.b.ALGEBRA_M::rmb((l_,m_,re_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+      [[input.s.b.(l_,m_,re_) <- receive.s.b.ALGEBRA_M::rmb((l_,m_,re_)) |
+          s <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO5]]
+      [[output.b.a.(l_,m_,se_) <- send.b.a.ALGEBRA_M::rmb((l_,m_,se_)) |
+          a <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+      [[output.b.s.(l_,m_,se_) <- send.b.s.ALGEBRA_M::rmb((l_,m_,se_)) |
+          s <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO4]]
+
+  -- SERVER
+
+  SERVER_0(s) =
+    [] a : Agent @ [] b : Agent @ [] nb : nonce @ 
+      member((Msg4, Encrypt.(SKey__.(b), <a, b, nb, Encrypt.(SKey__.(a), <a, b, nb>)>),<>), INPUT_INT_MSG4) & 
+      input.b.s.(Msg4, Encrypt.(SKey__.(b), <a, b, nb, Encrypt.(SKey__.(a), <a, b, nb>)>),<>) ->
+    member((Msg5, Encrypt.(SKey__.(b), <a, b, nb>),<>), OUTPUT_INT_MSG5) & 
+    output.s.b.(Msg5, Encrypt.(SKey__.(b), <a, b, nb>),<>) ->
+    SKIP
+
+  SERVER_1(s) = SERVER_0(s)
+
+  SERVER(s) =
+    SERVER_1(s)
+      [[input.b.s.(l_,m_,re_) <- receive.b.s.ALGEBRA_M::rmb((l_,m_,re_)) |
+          b <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO4]]
+      [[output.s.b.(l_,m_,se_) <- send.s.b.ALGEBRA_M::rmb((l_,m_,se_)) |
+          b <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO5]]
+
+  -- Process representing Alice
+
+  Alpha_Alice = 
+    Union({
+      {|env.Alice|},
+      {|send.Alice.A_ | A_ <- ALL_PRINCIPALS|}
+    })
+
+  AGENT_Alice = STOP
+
+  -- Process representing Bob
+
+  Alpha_RESPONDER_Bob = 
+    Union({
+      {|send.Bob.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG2|},
+      {|send.Bob.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG4|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5|}
+    })
+
+  RESPONDER_Bob = ((RESPONDER(Bob, Alice, nb_E1) ; STOP)
+    |||
+    (RESPONDER(Bob, Alice, nb_E2) ; STOP))
+
+  Alpha_Bob = 
+    Union({
+      {|env.Bob|},
+      {|send.Bob.A_ | A_ <- ALL_PRINCIPALS|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5|}
+    })
+
+  AGENT_Bob =
+    (RESPONDER_Bob [Alpha_RESPONDER_Bob || {} ] STOP)
+
+exports
+
+  -- Messages as they appear on the network; each messages is renamed
+  -- (by rmb) to the representative member of its equivalence class
+
+  INPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG1}
+  INPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG2}
+  INPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG3}
+  INPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG4}
+  INPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG5}
+
+  OUTPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG1}
+  OUTPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG2}
+  OUTPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG3}
+  OUTPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG4}
+  OUTPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG5}
+
+  DIRECT_MSG1 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO1}
+  DIRECT_MSG2 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO2}
+  DIRECT_MSG3 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO3}
+  DIRECT_MSG4 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO4}
+  DIRECT_MSG5 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO5}
+
+  -- Environmental messages
+
+  ENV_INT_MSG0 :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG0 = 
+    {(Env0, b, <>) |
+       b <- Agent}
+
+  ENV_MSG0 = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG0}
+
+  ENV_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG = ENV_INT_MSG0
+
+  -- information about messages sent and received by agents, including
+  -- extras fields for both agents
+
+  INT_MSG_INFO1_0 = 
+    {(Msg1, a, <>, <>) |
+       a <- Agent}
+  INT_MSG_INFO1 = 
+    {(Msg1, m, s, r) | (Msg1,m,s,r) <- INT_MSG_INFO1_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO2_0 = 
+    {(Msg2, nb, <>, <>) |
+       nb <- nonce}
+  INT_MSG_INFO2 = 
+    {(Msg2, m, s, r) | (Msg2,m,s,r) <- INT_MSG_INFO2_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO3_0 = 
+    {(Msg3, enc, <>, <>) |
+       enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})}
+  INT_MSG_INFO3 = 
+    {(Msg3, m, s, r) | (Msg3,m,s,r) <- INT_MSG_INFO3_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO4_0 = 
+    {(Msg4, Encrypt.(SKey__.(b), <a, b, nb, enc>), <>, <>) |
+       a <- Agent, b <- Agent, nb <- nonce, 
+       enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})}
+  INT_MSG_INFO4 = 
+    {(Msg4, m, s, r) | (Msg4,m,s,r) <- INT_MSG_INFO4_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO5_0 = 
+    {(Msg5, Encrypt.(SKey__.(b), <a, b, nb>), <>, <a>) |
+       a <- Agent, b <- Agent, nb <- nonce}
+  INT_MSG_INFO5 = 
+    {(Msg5, m, s, r) | (Msg5,m,s,r) <- INT_MSG_INFO5_0,
+      member(m,INTRUDER_M::KnowableFact)}
+
+  ENV_MSG = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG}
+
+  INT_MSG_INFO :: {(Labels, Encryption, <Encryption>, <Encryption>)}
+  INT_MSG_INFO = 
+    Union({
+      INT_MSG_INFO1,
+      INT_MSG_INFO2,
+      INT_MSG_INFO3,
+      INT_MSG_INFO4,
+      INT_MSG_INFO5
+    })
+  INPUT_INT_MSG1 = { input_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  INPUT_INT_MSG2 = { input_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  INPUT_INT_MSG3 = { input_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  INPUT_INT_MSG4 = { input_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  INPUT_INT_MSG5 = { input_proj(mt_) | mt_ <- INT_MSG_INFO5 }
+
+  INPUT_MSG = 
+    Union({
+      INPUT_MSG1,
+      INPUT_MSG2,
+      INPUT_MSG3,
+      INPUT_MSG4,
+      INPUT_MSG5
+    })
+  OUTPUT_INT_MSG1 = { output_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  OUTPUT_INT_MSG2 = { output_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  OUTPUT_INT_MSG3 = { output_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  OUTPUT_INT_MSG4 = { output_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  OUTPUT_INT_MSG5 = { output_proj(mt_) | mt_ <- INT_MSG_INFO5 }
+
+  OUTPUT_MSG = 
+    Union({
+      OUTPUT_MSG1,
+      OUTPUT_MSG2,
+      OUTPUT_MSG3,
+      OUTPUT_MSG4,
+      OUTPUT_MSG5
+    })
+  DIRECT_MSG = 
+  Union({
+    DIRECT_MSG1,
+    DIRECT_MSG2,
+    DIRECT_MSG3,
+    DIRECT_MSG4,
+    DIRECT_MSG5
+  })
+
+  channel input:ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_INT_MSG
+  channel output: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_INT_MSG
+  channel env_I : ALL_PRINCIPALS.ENV_INT_MSG
+
+  -- Complete system
+
+  SYSTEM_0 =
+    (AGENT_Alice
+      [Alpha_Alice||Alpha_Bob]
+    AGENT_Bob)
+
+endmodule
+
+-- ************************************************************************
+-- *                               Algebra                                *
+-- ************************************************************************
+
+module ALGEBRA_M
+
+  -- Algebraic laws, defined as a set of pairs
+
+  laws = {(Garbage, Garbage)}
+
+  -- Calculate transitive closure of algebraic laws, and select
+  -- representative member of each equivalence class
+
+  external mtransclose
+  renaming = mtransclose(laws, Fact_1)
+  ren = relational_inverse_image(renaming)
+
+  -- function that renames non-sequential fact to representative member
+
+  applyRenaming0(a_) =
+    let S_ = ren(a_)
+    within if card(S_)==0 then a_ else elsing(S_)
+
+  elsing({x_}) = x_
+
+  domain = {a_ | (_,a_) <- renaming}
+
+exports
+
+  -- function that renames arbitrary fact to representative member
+
+  applyRenaming(Sq.ms_) =
+    if member(Sq.ms_, Fact_1) then applyRenaming0(Sq.ms_) 
+    else Sq.<applyRenaming0(m_) | m_ <- ms_>
+  applyRenaming(a_) = applyRenaming0(a_)
+
+  -- function that renames (label, fact, extras) triples
+
+  rmb((l_,m_,extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(extras_))
+  rmb4((l_,m_,s_extras_,r_extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(s_extras_), 
+     applyRenamingToSeq(r_extras_))
+
+  -- lift renaming to sets and to deductions
+
+  applyRenamingToSet(X_) =
+    union({elsing(ren(a_)) | a_ <- inter(X_,domain)},  diff(X_, domain))
+
+  applyRenamingToSeq(X_) = <applyRenaming(e_) | e_ <- X_>
+
+  applyRenamingToDeductions(S_) =
+    {(applyRenaming0(f_), applyRenamingToSet(X_)) | (f_,X_) <- S_}
+
+endmodule
+
+-- ************************************************************************
+-- *                             The Intruder                             *
+-- ************************************************************************
+
+module INTRUDER_M
+
+  -- Unbound Parallel functions and sets, necessary for deductions
+
+  honest(x) = x != Mallory
+
+  -- Intruder's deductions
+
+  unSq_ (Sq.ms_) = set(ms_)
+  unSq_ (m_) = {m_}
+
+  unknown_(S_) = diff(S_, IK0)
+
+  Base_Deductions_ =
+    Union({SqDeductions, UnSqDeductions, 
+           EncryptionDeductions, DecryptionDeductions,
+           VernEncDeductions, VernDecDeductions, 
+           FnAppDeductions, HashDeductions,
+           SentDeductions, All_Internal_Deductions, UserDeductions})
+
+  SqDeductions =
+    {(Sq.fs_, unknown_(set(fs_))) | Sq.fs_ <- Fact_1}
+
+  UnSqDeductions =
+    {(f_, unknown_({Sq.fs_})) | Sq.fs_ <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  EncryptionDeductions =
+    {(Encrypt.(k_,fs_), unknown_(union({k_}, set(fs_)))) | 
+        Encrypt.(k_,fs_) <- Fact_1}
+
+  DecryptionDeductions =
+    {(f_, unknown_({Encrypt.(k_,fs_), inverse(k_)})) |
+        Encrypt.(k_,fs_) <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  VernEncDeductions =
+    {(Xor.(m1_,m2_), unknown_(union(unSq_(m1_), unSq_(m2_)))) | 
+        Xor.(m1_,m2_) <- Fact_1}
+
+  VernDecDeductions =
+      {(m11_, union(unknown_(unSq_(m2_)), {Xor.(m1_,m2_)})) | 
+         Xor.(m1_,m2_) <- Fact_1, m11_ <- unSq_(m1_)}
+
+  HashDeductions = {(Hash.(f_, ms_), set(ms_)) | Hash.(f_, ms_) <- Fact_1}
+
+  -- Unbound Parallel Deductions
+
+  SentDeductions = {(m_, {Sent.(m_,fs_)}) | Sent.(m_,fs_) <- Fact_1}
+
+  -- The paramaterised deductions
+
+  deductions_INITIATOR_0(a, b, s, nb) =
+    Union({
+      {( Sent.(a, <a, b>), {  })},
+      {( Sent.(Encrypt.(SKey__.(a), <a, b, nb>), <a, b, nb>), 
+        { nb, Sent.(a, <a, b>) })}
+    })
+
+  -- Deductions for internalised INITIATOR running with honest
+  -- agent
+  deductions_INITIATOR_with_honest =
+    Union({
+      deductions_INITIATOR_0(a, b, s, nb) |
+        b <- Agent, s <- Server, nb <- nonce, a <- inter(Agent,HONEST), honest(b) and honest(s)
+      })
+
+  -- Deductions for internalised INITIATOR running with dishonest
+  -- agent.
+  deductions_INITIATOR_with_dishonest =
+    Union({
+      deductions_INITIATOR_0(a, b, s, nb) |
+        b <- Agent, s <- Server, nb <- nonce, a <- inter(Agent,HONEST), not(honest(b) and honest(s))
+      })
+
+  -- Deductions for external INITIATOR running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_INITIATOR_external_0(a, b, s, nb) =
+    Union({
+      {( a, {  })},
+      {( Encrypt.(SKey__.(a), <a, b, nb>), { nb, a })}
+    })
+
+  deductions_INITIATOR_external = 
+    Union({
+      deductions_INITIATOR_external_0(a, b, s, nb) | 
+        b <- Agent, s <- Server, nb <- nonce, a <- {}
+    })
+
+  -- The paramaterised deductions
+
+  deductions_RESPONDER_0(a, b, s, nb) =
+    Union({
+      {( Sent.(nb, <b, a, nb>), { a })},
+      {( Sent.(Encrypt.(SKey__.(b), <a, b, nb, enc>), <b, s, a, nb, enc>), 
+        { enc, Sent.(nb, <b, a, nb>) })
+          | enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})}
+    })
+
+  -- Deductions for internalised RESPONDER running with honest
+  -- agent
+  deductions_RESPONDER_with_honest =
+    Union({
+      deductions_RESPONDER_0(a, b, s, nb) |
+        a <- Agent, b <- inter(Agent,HONEST), s <- Server, nb <- {nonce_P}, honest(a)
+      })
+
+  -- Deductions for internalised RESPONDER running with dishonest
+  -- agent.
+  deductions_RESPONDER_with_dishonest =
+    Union({
+      deductions_RESPONDER_0(a, b, s, nb) |
+        a <- Agent, b <- inter(Agent,HONEST), s <- Server, nb <- {nonce_P}, not(honest(a))
+      })
+
+  -- Deductions for external RESPONDER running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_RESPONDER_external_0(a, b, s, nb) =
+    Union({
+      {( nb, { a })},
+      {( Encrypt.(SKey__.(b), <a, b, nb, enc>), { enc, nb })
+          | enc <- addGarbage_({Encrypt.(SKey__.(a), <a, b, nb>) | a <- Agent, b <- Agent, nb <- nonce})}
+    })
+
+  deductions_RESPONDER_external = 
+    Union({
+      deductions_RESPONDER_external_0(a, b, s, nb) | 
+        a <- Agent, b <- {Bob}, s <- Server, nb <- {nb_E1, nb_E2}
+    })
+
+  -- The paramaterised deductions
+
+  deductions_SERVER_0(a, b, s, nb) =
+    {( Sent.(Encrypt.(SKey__.(b), <a, b, nb>), <s, b, a, nb>), 
+        { Encrypt.(SKey__.(b), <a, b, nb, Encrypt.(SKey__.(a), <a, b, nb>)>) })}
+
+  -- Deductions for internalised SERVER running with honest
+  -- agent
+  deductions_SERVER_with_honest =
+    Union({
+      deductions_SERVER_0(a, b, s, nb) |
+        a <- Agent, b <- Agent, nb <- nonce, s <- inter(Server,HONEST), honest(a) and honest(b)
+      })
+
+  -- Deductions for internalised SERVER running with dishonest
+  -- agent.
+  deductions_SERVER_with_dishonest =
+    Union({
+      deductions_SERVER_0(a, b, s, nb) |
+        a <- Agent, b <- Agent, nb <- nonce, s <- inter(Server,HONEST), not(honest(a) and honest(b))
+      })
+
+  -- Deductions for external SERVER running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_SERVER_external_0(a, b, s, nb) =
+    {( Encrypt.(SKey__.(b), <a, b, nb>), 
+        { Encrypt.(SKey__.(b), <a, b, nb, Encrypt.(SKey__.(a), <a, b, nb>)>) })}
+
+  deductions_SERVER_external = 
+    Union({
+      deductions_SERVER_external_0(a, b, s, nb) | 
+        a <- Agent, b <- Agent, nb <- nonce, s <- {}
+    })
+
+  All_Internal_Deductions = 
+    Union({
+      deductions_INITIATOR_with_honest,
+      deductions_RESPONDER_with_honest,
+      deductions_SERVER_with_honest,
+      deductions_INITIATOR_with_dishonest,
+      deductions_RESPONDER_with_dishonest,
+      deductions_SERVER_with_dishonest
+    })
+
+  All_External_and_Internal_Deductions_ = 
+    Union({
+      All_Internal_Deductions,
+      deductions_INITIATOR_external,
+      deductions_RESPONDER_external,
+      deductions_SERVER_external
+    })
+
+  All_Deductions = Union({Base_Deductions, All_External_and_Internal_Deductions})
+
+  UserDeductions = {}
+
+  FnAppDeductions = {}
+
+  -- close up intruder's initial knowledge under deductions;
+  -- calculate which facts cannot be learnt
+
+  components_(Sq.ms_) = 
+    if member(Sq.ms_, Fact_1) then {Sq.ms_} else set(ms_)
+  components_(m_) = {m_}
+
+  Seeable_ = 
+    Union({unknown_(components_(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO})
+
+  -- The intruder
+
+  -- * leak is used to signal that a possible secret has been learnt
+  -- * hear and say are used to represent hearing or saying a message
+  -- * infer(f,fs) represent deducing fact f from the set of facts fs
+
+  -- Component of intruder for currently unknown fact f_:
+  -- * ms_ is the set of messages that contain f_ at the top level
+  -- * fss_ is the set of sets of facts from which f_ can be deduced
+  -- * ds_ is the set of deductions that use f_
+
+  IGNORANT(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    []
+    ([] fs_ : fss_, not(member(f_,fs_)) @ 
+        infer.(f_,fs_) -> KNOWS(f_,ms_,ds_))
+
+  -- Component of intruder for known fact f_
+
+  KNOWS(f_,ms_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    []
+    say?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    [] 
+    ([] ded@@(f1_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,ds_))
+    []
+    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,ds_)
+
+  -- Alphabet of this component
+
+  AlphaL(f_,ms_,fss_,ds_) =
+    Union({(if member(f_,ALL_SECRETS) then {leak.f_} else {}),
+           {hear.m_, say.m_ | m_ <- ms_},
+           {infer.(f_,fs_) | fs_ <- fss_},
+           {infer.(f1_,fs_) | (f1_,fs_) <- ds_}
+         })
+
+  -- Set of all (f_, ms_, fss_, ds_) for which intruder components 
+  -- must be built
+
+  f_ms_fss_ds_s(Deductions,LearnableFact) = 
+    let rid_ = relational_image(Deductions)
+        msf_ = relational_image({(f_, m_) | m_ <- MSG_BODY, f_ <- unSq_(m_)})
+        xsf_ = relational_image({(f_, x_) | x_@@(_,fs_) <- Deductions,
+                                            f_ <- fs_})
+    within {(f_, msf_(f_), rid_(f_), xsf_(f_)) | f_ <- LearnableFact}
+
+  -- Rename events appropriately
+
+  BUILD_INTRUDER_0(INTRUDER_0) =
+    ((chase(INTRUDER_0)
+      [[ hear.m_ <- hear.m_, hear.m_ <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| hear |}|] STOP)
+      [[ say.m_ <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| say |}|] STOP)
+
+  -- Add in facts that are known initially
+
+  SAY_KNOWN_0(IK1) = 
+    (inter(IK1, ALL_SECRETS) != {} & dummy_leak -> SAY_KNOWN_0(IK1)) 
+    [] dummy_send -> SAY_KNOWN_0(IK1) 
+    [] dummy_receive -> SAY_KNOWN_0(IK1) 
+
+  SAY_KNOWN(IK1) =
+    SAY_KNOWN_0(IK1)
+      [[ dummy_leak <- leak.f_ | f_ <- inter(IK1, ALL_SECRETS) ]]
+      [[ dummy_send <- dummy_send, dummy_send <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), components_(m_) <= IK1, 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+      [[ dummy_receive <- dummy_receive, dummy_receive <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), components_(m_) <= IK1, 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+
+  STOP_SET = { dummy_send, dummy_receive }
+
+exports
+
+  -- Types of sender and receiver of each message
+
+  SenderType (Msg1) = Agent
+  SenderType (Msg2) = Agent
+  SenderType (Msg3) = Agent
+  SenderType (Msg4) = Agent
+  SenderType (Msg5) = Server
+
+  ReceiverType(Msg1) = Agent
+  ReceiverType(Msg2) = Agent
+  ReceiverType(Msg3) = Agent
+  ReceiverType(Msg4) = Server
+  ReceiverType(Msg5) = Agent
+
+  -- Intruder's initial knowledge
+
+  IK0 = {SKey__.(Mallory), Alice, Alice, Bob, nonce_P, Garbage}
+
+  Base_Deductions = Base_Deductions_
+
+  All_External_and_Internal_Deductions =  All_External_and_Internal_Deductions_
+
+  Close_(IK_, ded_, fact_) =
+    CloseButNotFacts_(IK_, ded_, fact_, { })
+
+  -- The method below is used to calculate IK1 and Deductions and is important
+  -- when authentication checks are being done. If no check was done on f being
+  -- in Facts then the infer event corresponding to a signal may be hidden.
+  CloseButNotFacts_(IK_, ded_, fact_, signal_facts_) =
+    let IK1_ = 
+          union(IK_, {f_ | (f_,fs_) <- ded_, fs_ <= IK_ and not member(f_, signal_facts_)})
+        ded1_ = 
+          {(f_,fs_) | (f_,fs_) <- ded_, not (member(f_,IK_)),
+                      fs_ <= fact_}
+    within
+    if card(IK_)==card(IK1_) and card(ded_)==card(ded1_)
+    then (IK_, {(f_,diff(fs_,IK_)) | (f_,fs_) <- ded_})
+    else CloseButNotFacts_(IK1_, ded1_, fact_, signal_facts_)
+
+  -- Calculate knowable facts based using the external and internal deductions
+  (KnowableFact_, _) = 
+    Close_(ALGEBRA_M::applyRenamingToSet(IK0), 
+           ALGEBRA_M::applyRenamingToDeductions(All_Deductions), 
+           ALGEBRA_M::applyRenamingToSet(Fact_1))
+
+KnowableFact = KnowableFact_ 
+  -- Put components together in parallel
+  INTRUDER_00(Deductions,LearnableFact) = 
+    (|| (f_,ms_,fss_,ds_) : f_ms_fss_ds_s(Deductions,LearnableFact) @ 
+         [AlphaL(f_,ms_,fss_,ds_)] IGNORANT(f_,ms_,fss_,ds_))
+
+  -- Set of all deductions that could occur
+  COMBINED_DEDUCTIONS =
+    let ds_ = AUTH1_M::RenamedDeductions
+    within -- Don't you hate hacks like this (FDR does not allow empty channel types)?
+      if ds_ == {} then {(Garbage, {Garbage})} else ds_
+
+  -- Declare channels:
+  channel hear, say : MSG_BODY
+  channel dummy_leak, dummy_send, dummy_receive
+
+  -- Complete intruder
+
+  -- Intruder used for temporal specs
+  BUILD_INTRUDER'(INTRUDER_0,IK) =
+    (BUILD_INTRUDER_0(INTRUDER_0) ||| SAY_KNOWN(IK)) [| STOP_SET |] STOP
+
+endmodule
+
+-- FDR bug: cannot have a module prefix in a channel type
+Deductions' = INTRUDER_M::COMBINED_DEDUCTIONS
+channel infer : Deductions'
+
+IntruderInterface = 
+  Union({
+    {| receive.Mallory.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::INPUT_MSG1,
+      SYSTEM_M::INPUT_MSG2,
+      SYSTEM_M::INPUT_MSG3,
+      SYSTEM_M::INPUT_MSG4,
+      SYSTEM_M::INPUT_MSG5
+    }) |},
+    {| send.A_.Mallory.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::OUTPUT_MSG1,
+      SYSTEM_M::OUTPUT_MSG2,
+      SYSTEM_M::OUTPUT_MSG3,
+      SYSTEM_M::OUTPUT_MSG4,
+      SYSTEM_M::OUTPUT_MSG5
+    }) |}
+  })
+
+-- ************************************************************************
+-- *                    Specifications and Assertions                     *
+-- ************************************************************************
+
+-- ************************************************************************
+-- *                    Authentication specifications                     *
+-- ************************************************************************
+
+module AUTH_COMMON
+  createRenaming(factsRenaming) =
+    let rn = relational_image(factsRenaming)
+        dom = {a_ | (a_, _) <- factsRenaming}
+        extract({x_}) = x_
+    within \ x_ @ if member(x_,dom) then extract(rn(x_)) else x_
+
+  -- The first argument is something of type createRenaming(X)
+  renameSet(f_, X_) =
+    {f_(x_) | x_ <- X_}
+  renameDeductions(rn_, ds_) =
+    {(rn_(f_), renameSet(rn_, fs_)) | (f_, fs_) <- ds_}
+
+exports
+  -- Given a set of pairs (f, f') first compute the closure (but excluding
+  -- any facts in factsToRename) of the intruder's initial knowledge and then
+  -- rename all facts that appear in Deductions and LearnableFact.
+  RenameClosure(factsRenaming,factsToRename) = 
+    let
+      rn_ = createRenaming(factsRenaming)
+      (IK_,ded_) =
+        INTRUDER_M::CloseButNotFacts_(
+          ALGEBRA_M::applyRenamingToSet(INTRUDER_M::IK0),
+          ALGEBRA_M::applyRenamingToDeductions(INTRUDER_M::Base_Deductions),
+          ALGEBRA_M::applyRenamingToSet(INTRUDER_M::KnowableFact),
+          factsToRename)
+      learnableFact = diff(INTRUDER_M::KnowableFact,IK_)
+    within
+      (renameDeductions(rn_,ded_), IK_, renameSet(rn_,learnableFact))
+
+  -- System to be used for checking authentication specifications
+  AUTH_SYSTEM(INTRUDER_0,IK) = 
+    SYSTEM_M::SYSTEM_0
+    [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER'(INTRUDER_0,IK)
+
+endmodule
+
+-- ************************************************************************
+-- *                 Authentication specification number 1                *
+-- ************************************************************************
+
+module AUTH1_M
+
+  -- Set of all facts that would be renamed to signals in infer events
+  FACTS_TO_RENAME = 
+    {Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>) | 
+      Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>) <- INTRUDER_M::KnowableFact}
+
+  -- Set of tuples of the form (Fact, RunningFact) that is used to create a
+  -- renaming function of type Fact -> RunningFact.
+  FACT_RENAMING =
+    Union({
+      {(Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>), AuthTaggedSignals1.TRunning1.a.b.Internal)
+      | Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>) <- FACTS_TO_RENAME,
+        a_2_ == a, a_3_ == a, b_2_ == b, nb_2_ == nb,
+        not((member(nb,{nb_E1})) or (member(nb,{nb_E2})))},
+      {(Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>), AuthTaggedSignals1.TRunning1.a.b.External1)
+      | Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>) <- FACTS_TO_RENAME,
+        a_2_ == a, a_3_ == a, b_2_ == b, nb_2_ == nb,
+        member(nb,{nb_E1})},
+      {(Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>), AuthTaggedSignals1.TRunning1.a.b.External2)
+      | Sent.(Encrypt.(SKey__.(a), <a_2_, b, nb>), <a_3_, b_2_, nb_2_>) <- FACTS_TO_RENAME,
+        a_2_ == a, a_3_ == a, b_2_ == b, nb_2_ == nb,
+        member(nb,{nb_E2})}
+    })
+
+  (RenamedDeductions_,IK,RenamedLearnableFact) =
+    AUTH_COMMON::RenameClosure(FACT_RENAMING,FACTS_TO_RENAME)
+
+  -- Build the basic (non-chased) intruder by renaming all the infer.(f,fs)
+  -- events corresponding to the messages that should be renamed.
+  INTRUDER_0 = 
+    INTRUDER_M::INTRUDER_00(RenamedDeductions,RenamedLearnableFact)
+      [[infer.(AuthTaggedSignals1.TRunning1.a.b.tag_,fs_) <-
+         signal.Running1.INITIATOR_role.a.b
+        | (AuthTaggedSignals1.TRunning1.a.b.tag_, fs_) <- RenamedDeductions,
+          member(a,inter(Agent,HONEST)), member(b, {Bob})
+      ]] \ {|infer|}
+
+exports
+  RenamedDeductions = RenamedDeductions_
+
+  -- Datatypes below are what facts are renamed in in FACT_RENAMING above
+  datatype Tag1 = Internal | External1 | External2
+  datatype TaggedSignals1 = TRunning1.ALL_PRINCIPALS.ALL_PRINCIPALS.Tag1
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateINITIATORToRESPONDERAgreement =
+    let
+      bInstance(b, s, nb) =
+        signal.Running1.INITIATOR_role?a : inter(Agent,HONEST)!b ->
+          signal.Commit1.RESPONDER_role.b.a -> STOP
+      run(b, s, nb) = 
+        signal.Running1.INITIATOR_role?a : inter(Agent,HONEST)!b -> 
+        run(b, s, nb)
+    within
+      -- Number argument tuples so that duplicates are not eliminated
+      ||| (_,b, s, nb): {(1, Bob, Alice, nb_E1), (2, Bob, Alice, nb_E2)} @
+        sbisim(bInstance(b, s, nb)) ||| run(b, s, nb)
+
+  -- System for authentication checking
+
+  SYSTEM_1 =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(nonce)
+        Server_renamed_ = ALGEBRA_M::applyRenamingToSet(Server)
+    within
+      AUTH_COMMON::AUTH_SYSTEM(INTRUDER_0,IK)
+       [[send.a.b.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(a), <a, b, nb>), <>)) <-
+          signal.Running1.INITIATOR_role.a.b,  
+        receive.s.b.ALGEBRA_M::rmb((Msg5, Encrypt.(SKey__.(b), <a, b, nb>), <a>)) <-
+          signal.Commit1.RESPONDER_role.b.a |
+            a <- Agent_renamed_, b <- Agent_renamed_, nb <- nonce_renamed_, 
+            s <- Server_renamed_,
+            member(a,HONEST),
+            member((Msg3, Encrypt.(SKey__.(a), <a, b, nb>), <>),SYSTEM_M::OUTPUT_MSG3),
+            member((Msg5, Encrypt.(SKey__.(b), <a, b, nb>), <a>),SYSTEM_M::INPUT_MSG5)
+      ]]
+      \ {| env, leak, send, receive|}
+
+endmodule
+
+assert AUTH1_M::AuthenticateINITIATORToRESPONDERAgreement [T= 
+       AUTH1_M::SYSTEM_1
+

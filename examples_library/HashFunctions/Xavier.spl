@@ -1,0 +1,56 @@
+
+-- Protecting Mobile Agents through tracing
+
+#Free variables
+
+A, B, C : Host
+pb : Price
+SK : Host -> SecretKey
+PK : Host -> PublicKey
+InverseKeys = (PK, SK)
+secret0 : Secret
+--secret1 : HSecret
+hash : HashFunction
+
+
+#Processes
+
+INITIATOR(A,B,secret0) knows PK, SK(A)
+HOSTB(B,A,C,pb) knows PK, SK(B)
+HOSTC(C,A) knows PK, SK(C)
+
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> B : {hash(secret0)%secret1}{PK(B)}
+2.  B -> C : { pb, hash( pb, secret1%hash(secret0) )%proof1 }{PK(C)}
+3.  C -> A : { pb, proof1 % hash( pb, secret1%hash(secret0) ) }{PK(A)}
+
+
+#Specification
+-- PASS
+Agreement(B,A,[pb])
+--Agreement(A, B,[])
+
+
+#Actual variables
+Alice, Bob, Coco, Bad : Host
+PetitPrix : Price
+Secret0 : Secret
+
+
+#Functions
+symbolic PK, SK
+
+#System
+
+INITIATOR(Alice,Bob,Secret0)
+HOSTB(Bob,Alice,Coco,PetitPrix)
+HOSTC(Coco,Alice)
+
+
+#Intruder Information
+
+Intruder = Bad
+IntruderKnowledge = {Alice, Bob, Coco, PK, SK(Bad),SK(Coco)}

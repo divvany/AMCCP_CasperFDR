@@ -1,0 +1,68 @@
+-- Otway Rees Protocol, as adapted by BAN
+-- Looking only at authentication
+
+#Free variables
+
+a, b : Agent
+s : Server
+na,nb : Nonce
+ServerKey : Agent -> ServerKeys
+kab : SessionKey
+InverseKeys = (kab, kab), (ServerKey, ServerKey)
+
+#Processes
+
+INITIATOR(a,s,na) knows ServerKey(a) generates na
+RESPONDER(b,s,nb) knows ServerKey(b) generates nb
+SERVER(s,kab) knows ServerKey generates kab
+
+#Protocol description
+
+0.    -> a : b
+[a != b]
+-- split message 1, and send encrypted part direct to S
+1a.  a -> b : na
+[a != b]
+1b.  a -> s : {na,a,b}{ServerKey(a)}
+-- split message 2
+2a. b -> s : na 
+2b. b -> s : {nb, na, a,b}{ServerKey(b)}
+-- split message 3, and send encrypted part direct to a
+3a. s -> a : {na,kab}{ServerKey(a)}
+3b. s -> b : na, {nb,kab}{ServerKey(b)}
+
+#Specification
+
+-- FAIL
+Agreement(a, b, [])
+-- FAIL
+TimedAgreement(a, b, 0, [])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+Np : Nonce (InternalKnown)
+Ns : Nonce (InternalUnknown)
+Ne1, Ne2 : Nonce (External)
+Kabp : SessionKey (InternalKnown)
+Kabs : SessionKey (InternalUnknown)
+MaxRunTime = 0
+InverseKeys = (Kabp, Kabp), (Kabs, Kabs)
+
+#Inline functions
+
+symbolic ServerKey
+
+#System
+
+RESPONDER(Bob, Sam, Ne1)
+RESPONDER(Bob, Sam, Ne2)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, ServerKey(Mallory), Np}
+
+UnboundParallel = True
+

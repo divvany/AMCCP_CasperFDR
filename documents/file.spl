@@ -1,0 +1,52 @@
+-- 6.2.3. ISO Two-Pass Mutual Authentication with CCF's
+
+#Free variables
+
+A,B : Agent
+ta,tb : TimeStamp
+f : HashFunction
+Shared : Agent x Agent -> SharedKey
+InverseKeys = (Shared,Shared)
+
+#Processes
+
+INITIATOR(A) knows Shared(A,B)
+RESPONDER(B) knows Shared(A,B) 
+
+#Protocol description
+
+0.    -> A : B
+[A != B]
+1.  A -> B : ta,f(Shared(A,B),ta,B)
+[ta==now or ta+1==now]
+2.  B -> A : tb,f(Shared(A,B),tb,A)
+[tb==now or tb+1==now]
+
+#Specification
+
+-- PASS
+TimedAgreement(A,B,2,[])
+-- PASS
+Agreement(A,B,[])
+-- PASS
+Agreement(B,A,[])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+TimeStamp = 0 .. 2
+MaxRunTime = 1
+
+#Functions
+
+symbolic Shared
+
+#System
+
+INITIATOR(Alice)
+RESPONDER(Bob)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice,Bob,Mallory,Shared(Alice,Mallory),Shared(Mallory,Alice),Shared(Bob,Mallory),Shared(Mallory,Bob)}

@@ -1,0 +1,57 @@
+-- Simplified version of Yahalom
+#Free variables
+a, b : Agent
+s : Server
+na: Nonce [NonceNA]
+nb : Nonce [NonceNB]
+kab : SessionKey
+ServerKey : Agent -> ServerKeys
+InverseKeys = (kab, kab), (ServerKey, ServerKey)
+
+#Processes
+INITIATOR(a,na) knows ServerKey(a) generates na
+RESPONDER(b,s,nb) knows ServerKey(b) generates nb
+SERVER(s,kab) knows ServerKey generates kab
+
+#Protocol description
+0.    -> a : b
+1.  a -> b : na
+2.  b -> s : {a, na, nb}{ServerKey(b)}
+3a. s -> a : {b, kab, na, nb}{ServerKey(a)}
+3b. s -> b : {a, kab}{ServerKey(b)}
+4.  a -> b : {nb}{kab}
+
+#Specification
+
+-- PASS
+if Bob receives message 4 from Alice containing Ne1 for nb, Kabs1 for kab then
+    previously Sam sends message 3b to Bob containing Kabs1 for kab, Alice for a
+    
+-- PASS
+if Bob receives message 4 from Alice containing Ne1 for nb, Kabs1 for kab then
+    (previously Sam sends message 3b to Bob containing Kabs1 for kab, Alice for a)
+    and (previously Sam sends message 3a to Alice containing Kabs1 for kab, Bob for b, Ne1 for nb)
+
+#Actual variables
+Alice, Bob, Mallory : Agent
+Sam : Server
+Kabp : SessionKey (InternalKnown)
+Kabs1, Kabs2 : SessionKey (InternalUnknown)
+Np : Nonce (InternalKnown)
+Na1, Na2 : Nonce (InternalUnknown) [NonceNA]
+Nb1, Nb2 : Nonce (InternalUnknown) [NonceNB]
+Ne1, Ne2 : Nonce (External)
+InverseKeys = (Kabp, Kabp), (Kabs1, Kabs1), (Kabs2, Kabs2)
+
+#Inline functions
+symbolic ServerKey
+
+#System
+RESPONDER(Bob, Sam, Ne1)
+RESPONDER(Bob, Sam, Ne2)
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, Np, ServerKey(Mallory)}
+
+UnboundParallel = True

@@ -1,0 +1,64 @@
+-- Needham Schroeder Public Key Protocol, 
+-- 7 message version, with type flaw.
+
+#Free variables
+A, B : Agent
+na, nb : Nonce
+pka, pkb : PublicKey
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+PKS : Server -> ServerPublicKey
+SKS : Server -> ServerSecretKey
+realAgent : Agent -> Bool
+S: Server
+InverseKeys = (PK,SK), (PKS, SKS)
+
+#Processes
+INITIATOR(A,na,S) knows SK(A), PKS
+RESPONDER(B,nb,S) knows SK(B), PKS
+SERVER(S) knows PK, SKS(S)
+
+#Protocol description
+0.    -> A : B
+[realAgent(B)]
+1.  A -> S : B   
+[realAgent(B)]
+2.  S -> A : {B, PK(B) % pkb}{SKS(S)}
+3.  A -> B : {na, A}{pkb % PK(B)}
+4.  B -> S : A
+[realAgent(A)]
+5.  S -> B : {A, PK(A) % pka}{SKS(S)}
+6.  B -> A : {na, nb}{pka % PK(A)}
+7.  A -> B : {nb}{pkb % PK(B)}
+
+#Specification
+-- FAIL
+Secret(A, na, [B])
+-- FAIL
+Secret(B, nb, [A])
+-- FAIL
+Agreement(A, B, [na,nb])
+-- PASS
+Agreement(B, A, [na,nb])
+
+#Actual variables
+Alice, Bob, Mallory, Nb : Agent
+Na, Nb, Nm : Nonce
+Sam : Server
+
+#Functions
+symbolic PK, SK, PKS, SKS
+realAgent(Alice) = true
+realAgent(Bob) = true
+realAgent(Mallory) = true
+realAgent(_) = false
+
+#System
+RESPONDER(Alice, Na, Sam)
+RESPONDER(Bob, Nb, Sam)
+SERVER(Sam)
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = \
+  {Alice, Bob, Mallory, Nm, Sam, PK, PKS, SK(Mallory)}

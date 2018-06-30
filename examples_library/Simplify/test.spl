@@ -1,0 +1,39 @@
+-- wrong syntax
+#Free variables
+
+A, B : Agent
+na, nb : Nonce
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+kab : SessionKey
+ts : TimeStamp
+InverseKeys = (PK, SK), (kab,kab)
+f : HashFunction
+
+#Processes
+
+INITIATOR(A,na, kab) knows PK, SK(A)
+RESPONDER(B,nb,kab) knows PK, SK(B)
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> B : {na, A,ts}{PK(B)}
+2.  B -> A : {na, nb, A,ts}{PK(A)}
+3.  A -> B : f(na, A, f(B)) 
+4.  B -> A : {na, A}{PK(A)}
+
+#Specification
+
+-- PASS
+Secret(A, na, [B])
+-- PASS
+Agreement(A,B,[na,nb])
+-- PASS
+Agreement(B,A,[na,nb])
+
+#Simplifications
+
+RemoveFields [TimeStamp]
+SwapPairs (Nonce, Agent)
+RemoveHash f(Agent)

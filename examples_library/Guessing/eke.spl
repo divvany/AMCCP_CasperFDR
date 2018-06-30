@@ -1,0 +1,69 @@
+-- Encrypted Key Exchange
+
+#Free variables
+
+a, b : Agent
+na, nb : Nonce
+k : SessionKey
+pk : PubKey
+sk : SecKey
+passwd : Agent x Agent -> Password
+InverseKeys = (passwd, passwd), (pk, sk), (k,k)
+
+#Processes
+
+INITIATOR(a, pk, sk, na) knows passwd(a,b)
+RESPONDER(b, nb, k) knows passwd(a,b)
+
+#Protocol description
+
+0.    -> a : b
+-- [ a != b ]
+1.  a -> b : a, {pk}{passwd(a,b)}
+-- [ a != b ]
+2.  b -> a : { {k}{pk} }{passwd(a,b)}
+3.  a -> b : {na}{k}
+4.  b -> a : {na, nb}{k}
+5.  a -> b : {nb}{k}
+
+#Specification
+
+-- PASS
+Secret(a, passwd(a,b), [b])
+-- PASS
+Agreement(b,a,[na])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Na1, Nb1, Nm : Nonce
+-- Na1, Na2, Nb1, Nb2, Nm : Nonce
+K1, Km : SessionKey
+-- K1, K2, Km : SessionKey
+PK1, PKm : PubKey
+SK1, SKm : SecKey
+-- PK1, PK2, PKm : PubKey
+-- SK1, SK2, SKm : SecKey
+InverseKeys = (PK1, SK1), (PKm, SKm), (K1, K1), (Km, Km)
+-- InverseKeys = (PK1, SK1), (PK2, SK2), (PKm, SKm), (K1, K1), (K2, K2), (Km, Km)
+
+#Functions
+
+symbolic passwd
+
+#System
+
+INITIATOR(Alice, PK1, SK1, Na1)
+--INITIATOR(Alice, PK2, SK2, Na2)
+RESPONDER(Bob, Nb1, K1)
+--RESPONDER(Bob, Nb2, K2)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Nm, PKm, SKm, \
+                     passwd(Mallory, Alice), passwd(Mallory, Bob), \
+                     passwd(Alice, Mallory), passwd(Bob, Mallory)}
+
+-- PASS
+Guessable = Password

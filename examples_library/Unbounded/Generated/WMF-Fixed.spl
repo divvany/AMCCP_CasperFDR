@@ -1,0 +1,65 @@
+-- Wide Mouthed Frog Protocol
+
+#Free variables
+
+A, B : Agent
+S : Server
+kab : SessionKey
+ts, ts' : TimeStamp
+SKey : Agent -> ServerKey
+InverseKeys = (SKey,SKey)
+
+#Processes
+
+INITIATOR(A,S,kab) knows SKey(A) generates kab
+RESPONDER(B) knows SKey(B)
+SERVER(S) knows SKey
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> S : {B, ts, kab}{SKey(A)}
+[ts >= now - 2]
+2.  S -> B : {ts', A, kab}{SKey(B)}
+[ts' >= now - 2]
+3.  B -> A : A
+
+#Specification
+
+-- PASS
+TimedAliveness(A,B,1)
+-- PASS
+TimedWeakAgreement(A,B,1)
+-- PASS
+TimedNonInjectiveAgreement(A,B,1,[])
+-- PASS
+NonInjectiveAgreement(A,B,[kab])
+-- FAIL
+TimedAgreement(A,B,1,[])
+-- FAIL
+Agreement(A,B,[kab])
+-- PASS
+StrongSecret(A,kab,[B,S])
+-- PASS
+Secret(B,kab,[A])
+
+#Actual variables
+
+Mallory : Agent
+TimeStamp = 0 .. 2
+MaxRunTime = 1
+
+#Functions
+
+symbolic SKey
+
+#System
+GenerateSystem = True
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Mallory, SKey(Mallory)}
+
+UnboundParallel = True
+

@@ -1,0 +1,54 @@
+-- Wide Mouthed Frog Protocol
+
+#Free variables
+
+A, B : Agent
+S : Server
+kab : SessionKey
+ts, ts' : TimeStamp
+SKey : Agent -> ServerKey
+InverseKeys = (SKey,SKey)
+
+#Processes
+
+INITIATOR(A,S,kab) knows SKey(A)
+RESPONDER(B) knows SKey(B)
+SERVER(S) knows SKey
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> S : {B, ts, kab}{SKey(A)}
+[ts==now or ts+1==now]
+2.  S -> B : {A, ts', kab}{SKey(B)}
+[ts'==now or ts'+1==now]
+3.  B -> A : A
+
+#Specification
+
+-- PASS
+if Bob sends message 3 to Alice then
+    previously Bob receives message 2 from S containing Alice for A
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+Kab : SessionKey
+TimeStamp = 0 .. 2
+MaxRunTime = 1
+
+#Functions
+
+symbolic SKey
+
+#System
+
+INITIATOR(Alice, Sam, Kab)
+RESPONDER(Bob)
+SERVER(Sam); SERVER(Sam); SERVER(Sam)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, SKey(Mallory)}

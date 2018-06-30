@@ -1,0 +1,66 @@
+-- Needham Schroeder Shared Key Protocol, with key compromise
+
+#Free variables
+
+A, B   : Agent
+S      : Server
+na, nb : Nonce
+SKey   : Agent -> ServerKey
+kab   : SessionKey
+
+InverseKeys = (SKey,SKey), (kab,kab)
+
+#Processes
+
+INITIATOR(A,S,na) knows SKey(A) 
+RESPONDER(B,nb) knows SKey(B) 
+SERVER(S,kab) knows SKey
+
+#Protocol description
+
+0.   -> A : B
+[A != B]
+1. A -> S : A, B, na
+2. S -> A : {na, B, kab}{SKey(A)} 
+3. S -> B : {kab,A}{SKey(B)}
+[A != B]
+4. B -> A : {nb}{kab}
+[A != B]
+5. A -> B : {nb,nb}{kab}
+
+#Specification
+
+-- PASS
+Agreement(B, A, [])
+-- FAIL
+Agreement(A, B, [])
+-- FAIL
+Secret(A, kab, [B])
+-- FAIL
+Secret(B, kab, [A])
+
+#Actual variables
+
+Alice, Bob, Ivor  : Agent
+Stan              : Server
+Na, Nb, Ni        : Nonce
+Kab               : SessionKey
+
+InverseKeys = (Kab,Kab)
+
+#Inline functions
+
+symbolic SKey
+
+#System 
+
+INITIATOR(Alice, Stan, Na)
+RESPONDER(Bob, Nb)
+SERVER(Stan,Kab)
+-- WithdrawOption = True
+
+#Intruder Information
+
+Intruder = Ivor
+IntruderKnowledge = {Alice, Bob, Ivor, Stan, Ni, SKey(Ivor)}
+Crackable = SessionKey

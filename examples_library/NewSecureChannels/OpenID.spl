@@ -1,0 +1,81 @@
+-- OpenID authentication protocol
+
+#Free variables
+u  : User
+rp : RelyingParty
+op : OpenID
+m  : Message
+nk : Nonce
+k  : HashKey
+h  : HashFunction
+k1 : NullKey
+
+PK : OpenID -> NullKey
+SK : OpenID -> NullKey
+
+InverseKeys = (PK, SK)
+
+#Protocol description
+0.    -> u  : rp
+1. u  -> op : rp
+2. op ->  u : rp,nk,h(k,u) % hash
+3.  u -> rp : op,nk,(hash % h(k,u)) % hashrp
+4. rp -> u  : u
+5. u  -> rp : op
+6. rp -> op : u,nk,hashrp % h(k,u)
+7. op -> rp : u
+8. rp -> u  : m
+
+#Processes
+USER(u, op)
+RELYINGPARTY(rp, m)
+OPENID(op, nk, k)
+
+#Channels
+
+Session symmetric 1,2
+Session symmetric 3,8
+Session symmetric 6,7
+Session 4,5
+
+1 C NF NRA NR
+2 C NF NRA NR
+3 C NR-
+6 C NR-
+7 NF NRA-
+8 NF NRA-
+
+#Specification
+-- The attack is where Mallory is an OpenID provider.
+-- FAIL
+Agreement(u, rp, [op, nk])
+-- PASS
+Agreement(rp, u, [m, op, nk])
+-- FAIL
+Agreement(u, op, [rp, nk])
+-- FAIL
+Agreement(op, u, [rp, nk])
+-- FAIL
+Agreement(op, rp, [u, nk])
+-- FAIL
+Agreement(rp, op, [u, nk])
+
+#Actual variables
+Alice, Mallory : User
+Richard, Mallory : RelyingParty
+Olive, Mallory : OpenID
+M1, M2, Mm : Message
+NK1, NK2, Nm : Nonce
+K1, K2, Km : HashKey
+
+#Functions
+symbolic PK, SK
+
+#System
+USER(Alice, Olive); USER(Alice, Olive)
+RELYINGPARTY(Richard, M1); RELYINGPARTY(Richard, M2)
+OPENID(Olive, NK1, K1); OPENID(Olive, NK2, K2)
+
+#Intruder Information
+Intruder = Mallory
+IntruderKnowledge = {Alice, Richard, Olive, Mallory, Nm, Mm, Km}

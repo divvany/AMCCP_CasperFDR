@@ -1,0 +1,60 @@
+-- TMN protocol
+
+#Free variables
+
+a, b : Agent
+s : Server
+SPKey : Server -> PublicKey
+SSKey : Server -> SecretKey
+ka : SessionKey [Ka]
+kb : SessionKey [Kb]
+InverseKeys = (SPKey, SSKey)
+
+#Processes
+
+INITIATOR(a,s,ka) knows SPKey generates ka
+RESPONDER(b,s,kb) knows SPKey generates kb
+SERVER(s) knows SSKey
+
+#Protocol description
+
+0.    -> a : b
+[a != b]
+1.  a -> s : b, {ka}{SPKey(s)}
+[a != b]
+2.  s -> b : a
+[a != b]
+3.  b -> s : a, {kb}{SPKey(s)}
+4.  s -> a : kb (+) ka
+
+#Specification
+
+-- FAIL
+Secret(b, kb, [a,s])
+-- FAIL
+Agreement(a,b,[])
+
+#Functions
+
+symbolic SPKey, SSKey
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+Kp : SessionKey (InternalKnown)
+Ka1, Ka2 : SessionKey (InternalUnknown) [Ka]
+Kb1, Kb2 : SessionKey (InternalUnknown) [Kb]
+Ke1, Ke2 : SessionKey (External)
+
+#System
+
+RESPONDER(Bob, Sam, Ke1)
+RESPONDER(Bob, Sam, Ke2)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, SPKey, Kp}
+
+UnboundParallel = True

@@ -1,0 +1,63 @@
+-- Made up protocol, similar to Gong protocol
+
+#Free variables
+
+A, B : Agent
+S : Server
+na, nb : Nonce
+f : HashFunction
+k : SessionKey
+
+InverseKeys = (k,k)
+
+#Processes
+
+INITIATOR(A,na) 
+RESPONDER(B,S,nb) 
+SERVER(S,k) 
+
+#Protocol description
+
+0.    -> A : B
+1.  A -> B : A, B, na
+2.  B -> S : A, B, na, nb
+3.  S -> B : f(nb, A) (+) k
+4.  S -> A : f(na, B) (+) k
+5.  B -> A : {na}{k}, nb
+6.  A -> B : {nb}{k}
+
+#Specification
+
+-- FAIL
+Secret(A, k, [B])
+-- FAIL
+Secret(B, k, [A])
+-- FAIL
+Agreement(A,B,[na,nb])
+-- FAIL
+Agreement(B,A,[na,nb])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+Na, Nb, Nm : Nonce
+K1, K2 : SessionKey
+
+InverseKeys = (K1, K1), (K2, K2)
+
+#System
+
+INITIATOR(Alice, Na)
+RESPONDER(Bob, Sam, Nb)
+SERVER(Sam, K1)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, Sam, Nm, K2}
+
+-- passwd : Agent -> Password
+-- knows passwd(A)
+-- knows passwd(B)
+-- knows passwd

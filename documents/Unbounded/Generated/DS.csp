@@ -1,0 +1,1438 @@
+-- CSP script produced using Casper version 2.0
+
+-- -- Denning Saco
+-- 
+-- #Free variables
+-- 
+-- A, B : Agent
+-- S : Server
+-- SKey : Agent -> ServerKey
+-- kab : SessionKey
+-- ts : TimeStamp
+-- InverseKeys = (SKey, SKey), (kab,kab)
+-- 
+-- #Processes
+-- 
+-- INITIATOR(A,S) knows SKey(A)
+-- RESPONDER(B) knows SKey(B)
+-- SERVER(S,kab) knows SKey generates kab
+-- 
+-- #Protocol description
+-- 
+-- 0.    -> A : B
+-- 1.  A -> S : A, B
+-- 2.  S -> A : {kab, B, ts, {kab, A, ts}{SKey(B)}%v}{SKey(A)}
+-- [ts==now or ts==now-1]
+-- 3.  A -> B : v%{kab, A, ts}{SKey(B)}
+-- [ts==now or ts==now-1]
+-- 
+-- #Specification
+-- 
+-- -- PASS
+-- Secret(B,kab,[A])
+-- -- PASS
+-- TimedNonInjectiveAgreement(A,B,1,[])
+-- -- PASS
+-- NonInjectiveAgreement(A,B,[kab])
+-- -- FAIL
+-- TimedAgreement(A,B,1,[])
+-- -- FAIL
+-- Agreement(A,B,[kab])
+-- 
+-- #Actual variables
+-- 
+-- Mallory : Agent
+-- 
+-- TimeStamp = 0 .. 2
+-- MaxRunTime = 1
+-- 
+-- #Inline functions
+-- 
+-- symbolic SKey
+-- 
+-- #System
+-- 
+-- GenerateSystem = True
+-- 
+-- #Intruder Information
+-- 
+-- Intruder = Mallory
+-- IntruderKnowledge = {SKey(Mallory), Mallory}
+-- 
+-- UnboundParallel = True
+
+-- ************************************************************************
+-- *                                Types                                 *
+-- ************************************************************************
+
+-- Main datatype, representing all possible messages
+
+datatype Encryption =
+  Alice | Bob | SessionKey_P | kab_S | SessionKey_S | Mallory | Garbage | 
+  SKey__.Agent | Timestamp.TS | Sq.Seq(Encryption) | 
+  Encrypt.(ALL_KEYS,Seq(Encryption)) | Hash.(HashFunction, Seq(Encryption)) | 
+  Xor.(Encryption, Encryption) | Sent.(Encryption, Seq(Encryption)) | 
+  AuthTaggedSignals1.AUTH1_M__TaggedSignals1 | 
+  AuthTaggedSignals2.AUTH2_M__TaggedSignals2 | 
+  AuthTaggedSignals3.AUTH3_M__TaggedSignals3 | 
+  AuthTaggedSignals4.AUTH4_M__TaggedSignals4
+
+-- Some indirection to get around FDR parsing bugs with :: in datatype declarations
+AUTH1_M__TaggedSignals1 = AUTH1_M::TaggedSignals1
+AUTH2_M__TaggedSignals2 = AUTH2_M::TaggedSignals2
+AUTH3_M__TaggedSignals3 = AUTH3_M::TaggedSignals3
+AUTH4_M__TaggedSignals4 = AUTH4_M::TaggedSignals4
+
+-- All keys and hashfunctions in the system
+
+ALL_KEYS :: {Encryption}
+ALL_KEYS = ServerKey
+
+ASYMMETRIC_KEYS = {k_, inverse(k_) | k_ <- ALL_KEYS, k_!=inverse(k_)}
+HashFunction :: {Encryption}
+HashFunction = {}
+
+-- All atoms in the system
+
+ATOM = {Alice, Bob, SessionKey_P, kab_S, SessionKey_S, Mallory, Garbage}
+
+-- Information about timestamps
+
+now = 0
+MinTime = -2
+MaxTime = -0
+TS = {MinTime .. MaxTime}
+MaxRunTime = 1
+TimeStamp = {Timestamp.t_ | t_ <- TS}
+max(t0_,t1_) = if t0_>t1_ then t0_ else t1_
+min(t0_,t1_) = if t0_>t1_ then t1_ else t0_
+
+-- Some standard functions
+
+channel dummyrun_
+RUN(X_) = 
+  let drun = dummyrun_ -> drun
+  within drun[[dummyrun_ <- x_ | x_ <- X_]]
+
+encrypt(m_,k_) = Encrypt.(k_,m_)
+decrypt(Encrypt.(k1_,m_),k_) = if k_ == inverse(k1_) then m_ else <Garbage>
+decrypt(_,_) = <Garbage>
+decryptable(Encrypt.(k1_,m_),k_) = k_ == inverse(k1_) 
+decryptable(_,_) = false
+nth(ms_,n_) = if n_ == 1 then head(ms_) else nth(tail(ms_), n_ - 1)
+
+map(f_, <>) = <>
+map(f_, <x_>^xs_) = <f_(x_)>^map(f_,xs_)
+
+-- Decrement all timestamps by 1
+dects(t_) = if t_ > MinTime then t_-1 else t_
+updt(Timestamp.t_) = Timestamp.dects(t_)
+updt(Sq.es_) = Sq.map(updt,es_)
+updt(Encrypt.(k_,es_)) = Encrypt.(k_, map(updt,es_))
+updt(Hash.(f_,es_)) = Hash.(f_,map(updt,es_))
+updt(Xor.(e1_,e2_)) = Xor.(updt(e1_),updt(e2_))
+updt(AUTH1_M::TRunning1.ms_.A.B.tag_) = AUTH1_M::TRunning1.map(dects,ms_).A.B.tag_
+updt(AUTH3_M::TRunning3.ms_.A.B.tag_) = AUTH3_M::TRunning3.map(dects,ms_).A.B.tag_
+updt(x_) = x_
+
+-- add Garbage to a set that contains and encryption,
+-- hash function application of Vernam encryption
+
+addGarbage_(S_) =
+  if S_=={} then {Garbage}
+  else Union({S_, {Garbage | Encrypt._ <- S_}, 
+             {Garbage | Hash._ <- S_},
+             {Garbage | Xor._ <- S_}})
+
+-- Definitions of user supplied functions
+
+SKey(arg_1_) = SKey__.(arg_1_)
+
+-- Inverses of functions
+
+inverse(SessionKey_P) = SessionKey_P
+inverse(kab_S) = kab_S
+inverse(SessionKey_S) = SessionKey_S
+inverse(SKey__.arg_) = SKey__.arg_
+
+-- Types in system
+
+Agent = {Alice, Bob, Mallory}
+Server = {Alice}
+SessionKey = {SessionKey_P, kab_S, SessionKey_S}
+ServerKey = {SKey(arg_1_) | arg_1_ <- Agent}
+
+
+-- ************************************************************************
+-- *                               Messages                               *
+-- ************************************************************************
+
+-- Message labels
+
+datatype Labels =
+  Msg1 | Msg2 | Msg3 | Env0
+
+MSG_BODY = {ALGEBRA_M::applyRenaming(m_) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO}
+
+-- Type of principals
+
+ALL_PRINCIPALS = Union({Agent, Server})
+
+INTRUDER = Mallory
+
+HONEST = diff(ALL_PRINCIPALS, {INTRUDER})
+
+-- Channel declarations
+
+INPUT_MSG = SYSTEM_M::INPUT_MSG
+OUTPUT_MSG = SYSTEM_M::OUTPUT_MSG
+DIRECT_MSG = SYSTEM_M::DIRECT_MSG
+ENV_MSG :: {(Labels, Encryption, <Encryption>)}
+ENV_MSG = SYSTEM_M::ENV_MSG
+
+channel receive: ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_MSG
+channel send: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_MSG
+channel env : ALL_PRINCIPALS.ENV_MSG
+channel error
+channel start, close : HONEST.HONEST_ROLE
+
+channel leak : addGarbage_(ALL_SECRETS)
+-- Roles of agents
+
+datatype ROLE = INITIATOR_role | RESPONDER_role | SERVER_role
+
+HONEST_ROLE = ROLE
+
+-- Secrets in the protocol
+
+ALL_SECRETS_0 = SessionKey
+ALL_SECRETS = addGarbage_(ALGEBRA_M::applyRenamingToSet(ALL_SECRETS_0))
+
+-- Define type of signals, and declare signal channel
+
+datatype Signal = 
+  Claim_Secret.ALL_PRINCIPALS.ALL_SECRETS.Set(ALL_PRINCIPALS) |
+  Running1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  Commit1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  RunCom1.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  Running2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey |
+  Commit2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey |
+  RunCom2.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey.SessionKey |
+  Running3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  Commit3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  RunCom3.ALL_PRINCIPALS.ALL_PRINCIPALS |
+  Running4.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey |
+  Commit4.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey |
+  RunCom4.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey.SessionKey
+
+channel signal : Signal
+
+-- Timing functions
+
+channel tock
+
+TOCKS(n_) = n_>0 & tock -> TOCKS(n_ - 1) [] SKIP
+TSKIP = tock -> TSKIP [] SKIP
+allowInitTocks(P_) = tock -> allowInitTocks(P_) [] P_
+TIMEOUT = tock -> TSKIP
+transparent explicate
+addTime(P_,n_) = explicate(allowInitTocks((P_ ||| TOCKS(n_)) /\ TIMEOUT))
+
+Fact_1 = 
+  Union({
+    {Garbage},
+    Agent,
+    Server,
+    SessionKey,
+    TimeStamp,
+    ServerKey,
+    {Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS, 
+       v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})},
+    {Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS},
+    {Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>)>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS},
+    {Sq.<A, B> |
+       A <- Agent, B <- Agent},
+    {Sent.(Sq.<A, B>, <A, S, B>) |
+       A <- Agent, B <- Agent, S <- Server},
+    {Sent.(Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>), <S, A, B, kab, Timestamp.ts>) |
+       A <- Agent, B <- Agent, S <- Server, kab <- SessionKey, ts <- TS, 
+       v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})},
+    {Sent.(v, <A, B, S, kab, Timestamp.ts, v>) |
+       A <- Agent, B <- Agent, S <- Server, kab <- SessionKey, ts <- TS, 
+       v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})},
+    { sm_ | (sm_,_) <- INTRUDER_M::All_External_and_Internal_Deductions}
+  })
+
+external relational_inverse_image
+external relational_image
+transparent chase
+transparent sbisim
+
+-- ************************************************************************
+-- *                            Honest Agents                             *
+-- ************************************************************************
+
+module SYSTEM_M
+
+  -- types of messages sent and received by agents, as they are
+  -- considered by those agents
+
+  input_proj((l_,m_,se_,re_)) = (l_,m_,re_)
+  rmb_input_proj((l_,m_,se_,re_)) = ALGEBRA_M::rmb((l_,m_,re_))
+  output_proj((l_,m_,se_,re_)) = (l_,m_,se_)
+
+  INPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  INPUT_INT_MSG = 
+    Union({INPUT_INT_MSG1, INPUT_INT_MSG2, INPUT_INT_MSG3})
+
+  OUTPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  OUTPUT_INT_MSG = 
+    Union({OUTPUT_INT_MSG1, OUTPUT_INT_MSG2, OUTPUT_INT_MSG3})
+
+  -- INITIATOR
+
+  INITIATOR_0(runTimeRemaining_, A, S) =
+      INITIATOR_0'(runTimeRemaining_, A, S)
+
+  INITIATOR_0'(runTimeRemaining_, A, S) = 
+    tock -> INITIATOR_0'(runTimeRemaining_, updt(A), updt(S))
+    [] 
+    [] B : Agent @ member((Env0, B,<>), ENV_INT_MSG0) & 
+      env_I.A.(Env0, B,<>) ->
+    member((Msg1, Sq.<A, B>,<>), OUTPUT_INT_MSG1) & 
+    output.A.S.(Msg1, Sq.<A, B>,<>) ->
+      INITIATOR_0''(runTimeRemaining_, A, S, B)
+
+  INITIATOR_0''(runTimeRemaining_, A, S, B) = 
+    tock -> (if runTimeRemaining_ < 0 then SKIP
+      else INITIATOR_0''(runTimeRemaining_-1, updt(A), updt(S), updt(B)))
+    [] 
+    [] kab : SessionKey @ [] ts : TS @ 
+    [] v : addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS}) @ 
+      ts==now or ts==now-1 & 
+      member((Msg2, Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>),<>), INPUT_INT_MSG2) & 
+      input.S.A.(Msg2, Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>),<>) ->
+    member((Msg3, v,<kab>), OUTPUT_INT_MSG3) & 
+    output.A.B.(Msg3, v,<kab>) ->
+    SKIP
+
+  INITIATOR_1(runTimeRemaining_, A, S) = INITIATOR_0(runTimeRemaining_, A, S)
+
+  INITIATOR(runTimeRemaining_, A, S) =
+    INITIATOR_1(runTimeRemaining_, A, S)
+      [[input.S.A.(l_,m_,re_) <- receive.S.A.ALGEBRA_M::rmb((l_,m_,re_)) |
+          S <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+      [[output.A.S.(l_,m_,se_) <- send.A.S.ALGEBRA_M::rmb((l_,m_,se_)) |
+          S <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[output.A.B.(l_,m_,se_) <- send.A.B.ALGEBRA_M::rmb((l_,m_,se_)) |
+          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+      [[env_I.A.m_ <- env.A.ALGEBRA_M::rmb(m_) |
+          m_ <- ENV_INT_MSG0]]
+
+  -- RESPONDER
+
+  RESPONDER_0(runTimeRemaining_, B) =
+      RESPONDER_0'(runTimeRemaining_, B)
+
+  RESPONDER_0'(runTimeRemaining_, B) = 
+    tock -> RESPONDER_0'(runTimeRemaining_, updt(B))
+    [] 
+    [] A : Agent @ [] kab : SessionKey @ [] ts : TS @ 
+      ts==now or ts==now-1 & 
+      member((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>),<kab>), INPUT_INT_MSG3) & 
+      input.A.B.(Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>),<kab>) ->
+    SKIP
+
+  RESPONDER_1(runTimeRemaining_, B) = RESPONDER_0(runTimeRemaining_, B)
+
+  RESPONDER(runTimeRemaining_, B) =
+    RESPONDER_1(runTimeRemaining_, B)
+      [[input.A.B.(l_,m_,re_) <- receive.A.B.ALGEBRA_M::rmb((l_,m_,re_)) |
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
+
+  -- SERVER
+
+  SERVER_0(runTimeRemaining_, S, kab) =
+      SERVER_0'(runTimeRemaining_, S, kab)
+
+  SERVER_0'(runTimeRemaining_, S, kab) = 
+    tock -> SERVER_0'(runTimeRemaining_, updt(S), updt(kab))
+    [] 
+    [] A : Agent @ [] B : Agent @ 
+      member((Msg1, Sq.<A, B>,<>), INPUT_INT_MSG1) & 
+      input.A.S.(Msg1, Sq.<A, B>,<>) ->
+    [] ts : TS @ 
+      member((Msg2, Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>)>),<>), OUTPUT_INT_MSG2) & 
+      output.S.A.(Msg2, Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>)>),<>) ->
+    SKIP
+
+  SERVER_1(runTimeRemaining_, S, kab) = SERVER_0(runTimeRemaining_, S, kab)
+
+  SERVER(runTimeRemaining_, S, kab) =
+    SERVER_1(runTimeRemaining_, S, kab)
+      [[input.A.S.(l_,m_,re_) <- receive.A.S.ALGEBRA_M::rmb((l_,m_,re_)) |
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[output.S.A.(l_,m_,se_) <- send.S.A.ALGEBRA_M::rmb((l_,m_,se_)) |
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+
+  -- Process representing Alice
+
+  Alpha_Alice = 
+    Union({
+      {|env.Alice|},
+      {|send.Alice.A_ | A_ <- ALL_PRINCIPALS|},
+      {tock}
+    })
+
+  AGENT_Alice = RUN({|tock|})
+
+  -- Process representing Bob
+
+  Alpha_RESPONDER_Bob = 
+    Union({
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {tock}
+    })
+
+  RESPONDER_Bob = ((RESPONDER(MaxRunTime, Bob) ; RUN({tock}))
+    [|{tock}|]
+    (RESPONDER(MaxRunTime, Bob) ; RUN({tock})))
+
+  Alpha_Bob = 
+    Union({
+      {|env.Bob|},
+      {|send.Bob.A_ | A_ <- ALL_PRINCIPALS|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {tock}
+    })
+
+  AGENT_Bob =
+    (RESPONDER_Bob [Alpha_RESPONDER_Bob || {} ] STOP)
+
+exports
+
+  -- Messages as they appear on the network; each messages is renamed
+  -- (by rmb) to the representative member of its equivalence class
+
+  INPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG1}
+  INPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG2}
+  INPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG3}
+
+  OUTPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG1}
+  OUTPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG2}
+  OUTPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG3}
+
+  DIRECT_MSG1 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO1}
+  DIRECT_MSG2 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO2}
+  DIRECT_MSG3 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO3}
+
+  -- Environmental messages
+
+  ENV_INT_MSG0 :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG0 = 
+    {(Env0, B, <>) |
+       B <- Agent}
+
+  ENV_MSG0 = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG0}
+
+  ENV_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG = ENV_INT_MSG0
+
+  -- information about messages sent and received by agents, including
+  -- extras fields for both agents
+
+  INT_MSG_INFO1_0 = 
+    {(Msg1, Sq.<A, B>, <>, <>) |
+       A <- Agent, B <- Agent}
+  INT_MSG_INFO1 = 
+    {(Msg1, m, s, r) | (Msg1,m,s,r) <- INT_MSG_INFO1_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO2_0 = 
+    {(Msg2, Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>), <>, <>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS, 
+       v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})}
+  INT_MSG_INFO2 = 
+    {(Msg2, m, s, r) | (Msg2,m,s,r) <- INT_MSG_INFO2_0,
+      member(m,INTRUDER_M::KnowableFact)}
+  INT_MSG_INFO3_0 = 
+    {(Msg3, v, <kab>, <kab>) |
+       kab <- SessionKey, 
+       v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})}
+  INT_MSG_INFO3 = 
+    {(Msg3, m, s, r) | (Msg3,m,s,r) <- INT_MSG_INFO3_0,
+      member(m,INTRUDER_M::KnowableFact)}
+
+  ENV_MSG = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG}
+
+  INT_MSG_INFO :: {(Labels, Encryption, <Encryption>, <Encryption>)}
+  INT_MSG_INFO = Union({INT_MSG_INFO1, INT_MSG_INFO2, INT_MSG_INFO3})
+  INPUT_INT_MSG1 = { input_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  INPUT_INT_MSG2 = { input_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  INPUT_INT_MSG3 = { input_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+
+  INPUT_MSG = Union({INPUT_MSG1, INPUT_MSG2, INPUT_MSG3})
+  OUTPUT_INT_MSG1 = { output_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  OUTPUT_INT_MSG2 = { output_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  OUTPUT_INT_MSG3 = { output_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+
+  OUTPUT_MSG = Union({OUTPUT_MSG1, OUTPUT_MSG2, OUTPUT_MSG3})
+  DIRECT_MSG = Union({DIRECT_MSG1, DIRECT_MSG2, DIRECT_MSG3})
+
+  channel input:ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_INT_MSG
+  channel output: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_INT_MSG
+  channel env_I : ALL_PRINCIPALS.ENV_INT_MSG
+
+  -- Complete system
+
+  SYSTEM_0 =
+    (AGENT_Alice
+      [Alpha_Alice||Alpha_Bob]
+    AGENT_Bob)
+
+endmodule
+
+-- ************************************************************************
+-- *                               Algebra                                *
+-- ************************************************************************
+
+module ALGEBRA_M
+
+  -- Algebraic laws, defined as a set of pairs
+
+  laws = {(Garbage, Garbage)}
+
+  -- Calculate transitive closure of algebraic laws, and select
+  -- representative member of each equivalence class
+
+  external mtransclose
+  renaming = mtransclose(laws, Fact_1)
+  ren = relational_inverse_image(renaming)
+
+  -- function that renames non-sequential fact to representative member
+
+  applyRenaming0(a_) =
+    let S_ = ren(a_)
+    within if card(S_)==0 then a_ else elsing(S_)
+
+  elsing({x_}) = x_
+
+  domain = {a_ | (_,a_) <- renaming}
+
+exports
+
+  -- function that renames arbitrary fact to representative member
+
+  applyRenaming(Sq.ms_) =
+    if member(Sq.ms_, Fact_1) then applyRenaming0(Sq.ms_) 
+    else Sq.<applyRenaming0(m_) | m_ <- ms_>
+  applyRenaming(a_) = applyRenaming0(a_)
+
+  -- function that renames (label, fact, extras) triples
+
+  rmb((l_,m_,extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(extras_))
+  rmb4((l_,m_,s_extras_,r_extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(s_extras_), 
+     applyRenamingToSeq(r_extras_))
+
+  -- lift renaming to sets and to deductions
+
+  applyRenamingToSet(X_) =
+    union({elsing(ren(a_)) | a_ <- inter(X_,domain)},  diff(X_, domain))
+
+  applyRenamingToSeq(X_) = <applyRenaming(e_) | e_ <- X_>
+
+  applyRenamingToDeductions(S_) =
+    {(applyRenaming0(f_), applyRenamingToSet(X_)) | (f_,X_) <- S_}
+
+endmodule
+
+-- ************************************************************************
+-- *                             The Intruder                             *
+-- ************************************************************************
+
+module INTRUDER_M
+
+  -- Unbound Parallel functions and sets, necessary for deductions
+
+  honest(x) = x != Mallory
+
+  -- Intruder's deductions
+
+  unSq_ (Sq.ms_) = set(ms_)
+  unSq_ (m_) = {m_}
+
+  unknown_(S_) = diff(S_, IK0)
+
+  Base_Deductions_ =
+    Union({SqDeductions, UnSqDeductions, 
+           EncryptionDeductions, DecryptionDeductions,
+           VernEncDeductions, VernDecDeductions, 
+           FnAppDeductions, HashDeductions,
+           SentDeductions, All_Internal_Deductions, UserDeductions})
+
+  SqDeductions =
+    {(Sq.fs_, unknown_(set(fs_))) | Sq.fs_ <- Fact_1}
+
+  UnSqDeductions =
+    {(f_, unknown_({Sq.fs_})) | Sq.fs_ <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  EncryptionDeductions =
+    {(Encrypt.(k_,fs_), unknown_(union({k_}, set(fs_)))) | 
+        Encrypt.(k_,fs_) <- Fact_1}
+
+  DecryptionDeductions =
+    {(f_, unknown_({Encrypt.(k_,fs_), inverse(k_)})) |
+        Encrypt.(k_,fs_) <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  VernEncDeductions =
+    {(Xor.(m1_,m2_), unknown_(union(unSq_(m1_), unSq_(m2_)))) | 
+        Xor.(m1_,m2_) <- Fact_1}
+
+  VernDecDeductions =
+      {(m11_, union(unknown_(unSq_(m2_)), {Xor.(m1_,m2_)})) | 
+         Xor.(m1_,m2_) <- Fact_1, m11_ <- unSq_(m1_)}
+
+  HashDeductions = {(Hash.(f_, ms_), set(ms_)) | Hash.(f_, ms_) <- Fact_1}
+
+  -- Unbound Parallel Deductions
+
+  SentDeductions = {(m_, {Sent.(m_,fs_)}) | Sent.(m_,fs_) <- Fact_1}
+
+  -- The paramaterised deductions
+
+  deductions_INITIATOR_0(A, S, B, kab) =
+    Union({
+      {( Sent.(Sq.<A, B>, <A, S, B>), {  })},
+      {( Sent.(v, <A, B, S, kab, Timestamp.ts, v>), 
+        { Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>), Sent.(Sq.<A, B>, <A, S, B>) })
+          | ts <- TS, v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})}
+    })
+
+  -- Deductions for internalised INITIATOR running with honest
+  -- agent
+  deductions_INITIATOR_with_honest =
+    Union({
+      deductions_INITIATOR_0(A, S, B, kab) |
+        B <- Agent, kab <- SessionKey, A <- inter(Agent,HONEST), S <- Server, honest(B)
+      })
+
+  -- Deductions for internalised INITIATOR running with dishonest
+  -- agent.
+  deductions_INITIATOR_with_dishonest =
+    Union({
+      deductions_INITIATOR_0(A, S, B, kab) |
+        B <- Agent, kab <- SessionKey, A <- inter(Agent,HONEST), S <- Server, not(honest(B))
+      })
+
+  -- Deductions for external INITIATOR running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_INITIATOR_external_0(A, S, B, kab) =
+    Union({
+      {( Sq.<A, B>, {  })},
+      {( v, { Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, v>), Sq.<A, B> })
+          | ts <- TS, v <- addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})}
+    })
+
+  deductions_INITIATOR_external = 
+    Union({
+      deductions_INITIATOR_external_0(A, S, B, kab) | 
+        B <- Agent, kab <- SessionKey, A <- {}, S <- Server
+    })
+
+  -- The paramaterised deductions
+
+  deductions_RESPONDER_0(A, S, B, kab) ={}
+
+  -- Deductions for internalised RESPONDER running with honest
+  -- agent
+  deductions_RESPONDER_with_honest =
+    Union({
+      deductions_RESPONDER_0(A, S, B, kab) |
+        A <- Agent, S <- Server, kab <- SessionKey, B <- inter(Agent,HONEST), honest(A) and honest(S)
+      })
+
+  -- Deductions for internalised RESPONDER running with dishonest
+  -- agent.
+  deductions_RESPONDER_with_dishonest =
+    Union({
+      deductions_RESPONDER_0(A, S, B, kab) |
+        A <- Agent, S <- Server, kab <- SessionKey, B <- inter(Agent,HONEST), not(honest(A) and honest(S))
+      })
+
+  -- Deductions for external RESPONDER running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_RESPONDER_external_0(A, S, B, kab) ={}
+
+  deductions_RESPONDER_external = 
+    Union({
+      deductions_RESPONDER_external_0(A, S, B, kab) | 
+        A <- Agent, S <- Server, kab <- SessionKey, B <- {Bob}
+    })
+
+  -- The paramaterised deductions
+
+  deductions_SERVER_0(A, S, B, kab) =
+    {( Sent.(Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>)>), <S, A, B, kab, Timestamp.ts>), 
+        { Sq.<A, B> })
+          | ts <- TS}
+
+  -- Deductions for internalised SERVER running with honest
+  -- agent
+  deductions_SERVER_with_honest =
+    Union({
+      deductions_SERVER_0(A, S, B, kab) |
+        A <- Agent, B <- Agent, S <- inter(Server,HONEST), kab <- {kab_S, SessionKey_S}, honest(A) and honest(B)
+      })
+
+  -- Deductions for internalised SERVER running with dishonest
+  -- agent.
+  deductions_SERVER_with_dishonest =
+    Union({
+      deductions_SERVER_0(A, S, B, kab) |
+        A <- Agent, B <- Agent, S <- inter(Server,HONEST), kab <- {SessionKey_P}, not(honest(A) and honest(B))
+      })
+
+  -- Deductions for external SERVER running with any agent
+  -- These are used to better approximate KnowableFact so as to reduce the
+  -- size of LearnableFact.
+  deductions_SERVER_external_0(A, S, B, kab) =
+    {( Encrypt.(SKey__.(A), <kab, B, Timestamp.ts, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>)>), 
+        { Sq.<A, B> })
+          | ts <- TS}
+
+  deductions_SERVER_external = 
+    Union({
+      deductions_SERVER_external_0(A, S, B, kab) | 
+        A <- Agent, B <- Agent, S <- {}, kab <- {}
+    })
+
+  All_Internal_Deductions = 
+    Union({
+      deductions_INITIATOR_with_honest,
+      deductions_RESPONDER_with_honest,
+      deductions_SERVER_with_honest,
+      deductions_INITIATOR_with_dishonest,
+      deductions_RESPONDER_with_dishonest,
+      deductions_SERVER_with_dishonest
+    })
+
+  All_External_and_Internal_Deductions_ = 
+    Union({
+      All_Internal_Deductions,
+      deductions_INITIATOR_external,
+      deductions_RESPONDER_external,
+      deductions_SERVER_external
+    })
+
+  All_Deductions = Union({Base_Deductions, All_External_and_Internal_Deductions})
+
+  UserDeductions = {}
+
+  FnAppDeductions = {}
+
+  -- close up intruder's initial knowledge under deductions;
+  -- calculate which facts cannot be learnt
+
+  components_(Sq.ms_) = 
+    if member(Sq.ms_, Fact_1) then {Sq.ms_} else set(ms_)
+  components_(m_) = {m_}
+
+  Seeable_ = 
+    Union({unknown_(components_(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO})
+
+  -- The intruder
+
+  -- * leak is used to signal that a possible secret has been learnt
+  -- * hear and say are used to represent hearing or saying a message
+  -- * infer(f,fs) represent deducing fact f from the set of facts fs
+
+  -- Component of intruder for currently unknown fact f_:
+  -- * ms_ is the set of messages that contain f_ at the top level
+  -- * fss_ is the set of sets of facts from which f_ can be deduced
+  -- * ds_ is the set of deductions that use f_
+
+  IGNORANT(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    ([] fs_ : fss_, not(member(f_,fs_)) @ 
+        infer.(f_,fs_) -> KNOWS(f_,ms_,fss_,ds_))
+    [] tock -> (IGNORANT(f_,ms_,fss_,ds_)
+      -- We can only be the updated version if there is a fact that can
+      -- be updated to us.
+      [] card({f1_ | f1_ <- UpdateableFacts, updt(f1_) == f_, f_ != f1_}) > 0 &
+          tockInfer.f_ -> KNOWS(f_,ms_,fss_,ds_))
+
+  -- Component of intruder for known fact f_
+
+  KNOWS(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    []
+    say?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    [] 
+    ([] ded@@(f1_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,fss_,ds_))
+    []
+    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,fss_,ds_)
+    [] tock ->
+      (if updt(f_) != f_ then
+        tockInfer.updt(f_) -> IGNORANT(f_,ms_,fss_,ds_)
+      else -- Allow more infers (consider if we obtain a fresher version of this message)
+        KNOWS(f_,ms_,fss_,ds_)
+        [] tockInfer.f_ -> KNOWS(f_,ms_,fss_,ds_))
+
+  -- Alphabet of this component
+
+  AlphaL(f_,ms_,fss_,ds_) =
+    Union({(if member(f_,ALL_SECRETS) then {leak.f_} else {}),
+           {hear.m_, say.m_ | m_ <- ms_},
+           {infer.(f_,fs_) | fs_ <- fss_},
+           {infer.(f1_,fs_) | (f1_,fs_) <- ds_},
+           {tock, tockInfer.f_, tockInfer.updt(f_)}
+         })
+
+  -- Set of all (f_, ms_, fss_, ds_) for which intruder components 
+  -- must be built
+
+  f_ms_fss_ds_s(Deductions,LearnableFact) = 
+    let rid_ = relational_image(Deductions)
+        msf_ = relational_image({(f_, m_) | m_ <- MSG_BODY, f_ <- unSq_(m_)})
+        xsf_ = relational_image({(f_, x_) | x_@@(_,fs_) <- Deductions,
+                                            f_ <- fs_})
+    within {(f_, msf_(f_), rid_(f_), xsf_(f_)) | f_ <- LearnableFact}
+
+  -- Rename events appropriately
+
+  BUILD_INTRUDER_0(INTRUDER_0) =
+    ((chase(INTRUDER_0)
+      [[ hear.m_ <- hear.m_, hear.m_ <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| hear |}|] STOP)
+      [[ say.m_ <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+     [|{| say |}|] STOP)
+
+  -- Add in facts that are known initially
+
+  SAY_KNOWN_0(IK1) = 
+    (inter(IK1, ALL_SECRETS) != {} & dummy_leak -> SAY_KNOWN_0(IK1)) 
+    [] dummy_send -> SAY_KNOWN_0(IK1) 
+    [] dummy_receive -> SAY_KNOWN_0(IK1) 
+
+  SAY_KNOWN(IK1) =
+    SAY_KNOWN_0(IK1)
+      [[ dummy_leak <- leak.f_ | f_ <- inter(IK1, ALL_SECRETS) ]]
+      [[ dummy_send <- dummy_send, dummy_send <- send.A_.B_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), components_(m_) <= IK1, 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_) ]] 
+      [[ dummy_receive <- dummy_receive, dummy_receive <- receive.A_.B_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3
+         }), components_(m_) <= IK1, 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_) ]] 
+
+  STOP_SET = { dummy_send, dummy_receive }
+
+exports
+
+  -- Types of sender and receiver of each message
+
+  SenderType (Msg1) = Agent
+  SenderType (Msg2) = Server
+  SenderType (Msg3) = Agent
+
+  ReceiverType(Msg1) = Server
+  ReceiverType(Msg2) = Agent
+  ReceiverType(Msg3) = Agent
+
+  -- Intruder's initial knowledge
+
+  IK0 = union({SKey__.(Mallory), Mallory, Alice, Alice, Bob, SessionKey_P, 
+             Garbage}, TimeStamp)
+
+  Base_Deductions = Base_Deductions_
+
+  All_External_and_Internal_Deductions =  All_External_and_Internal_Deductions_
+
+  Close_(IK_, ded_, fact_) =
+    CloseButNotFacts_(IK_, ded_, fact_, { })
+
+  -- The method below is used to calculate IK1 and Deductions and is important
+  -- when authentication checks are being done. If no check was done on f being
+  -- in Facts then the infer event corresponding to a signal may be hidden.
+  CloseButNotFacts_(IK_, ded_, fact_, signal_facts_) =
+    let IK1_ = 
+          union(IK_, {f_ | (f_,fs_) <- ded_, fs_ <= IK_ and not member(f_, signal_facts_)})
+        ded1_ = 
+          {(f_,fs_) | (f_,fs_) <- ded_, not (member(f_,IK_)),
+                      fs_ <= fact_}
+    within
+    if card(IK_)==card(IK1_) and card(ded_)==card(ded1_)
+    then (IK_, {(f_,diff(fs_,IK_)) | (f_,fs_) <- ded_})
+    else CloseButNotFacts_(IK1_, ded1_, fact_, signal_facts_)
+
+  -- Calculate knowable facts based using the external and internal deductions
+  (KnowableFact_, _) = 
+    Close_(ALGEBRA_M::applyRenamingToSet(IK0), 
+           ALGEBRA_M::applyRenamingToDeductions(All_Deductions), 
+           ALGEBRA_M::applyRenamingToSet(Fact_1))
+
+KnowableFact = KnowableFact_ 
+  -- Put components together in parallel
+  INTRUDER_00(Deductions,LearnableFact) = 
+    (|| (f_,ms_,fss_,ds_) : f_ms_fss_ds_s(Deductions,LearnableFact) @ 
+         [AlphaL(f_,ms_,fss_,ds_)] IGNORANT(f_,ms_,fss_,ds_))
+
+  -- Set of all deductions that could occur
+  COMBINED_DEDUCTIONS =
+    let ds_ = 
+        Union({
+          AUTH1_M::RenamedDeductions,
+          AUTH2_M::RenamedDeductions,
+          AUTH3_M::RenamedDeductions,
+          AUTH4_M::RenamedDeductions,
+          SECRET_M::Deductions
+        })
+    within -- Don't you hate hacks like this (FDR does not allow empty channel types)?
+      if ds_ == {} then {(Garbage, {Garbage})} else ds_
+
+  -- Declare channels:
+  channel hear, say : MSG_BODY
+  channel dummy_leak, dummy_send, dummy_receive
+  UpdateableFacts = union({f_ | (f_,fs_) <- COMBINED_DEDUCTIONS},KnowableFact)
+  channel tockInfer : UpdateableFacts
+
+  -- Complete intruder
+
+  -- Intruder used for temporal specs
+  BUILD_INTRUDER'(INTRUDER_0,IK) =
+    (BUILD_INTRUDER_0(INTRUDER_0) ||| SAY_KNOWN(IK)) [| STOP_SET |] STOP
+
+endmodule
+
+-- FDR bug: cannot have a module prefix in a channel type
+Deductions' = INTRUDER_M::COMBINED_DEDUCTIONS
+channel infer : Deductions'
+
+IntruderInterface = 
+  Union({
+    {| receive.Mallory.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::INPUT_MSG1,
+      SYSTEM_M::INPUT_MSG2,
+      SYSTEM_M::INPUT_MSG3
+    }) |},
+    {| send.A_.Mallory.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::OUTPUT_MSG1,
+      SYSTEM_M::OUTPUT_MSG2,
+      SYSTEM_M::OUTPUT_MSG3
+    }) |},
+    {tock}
+  })
+
+-- ************************************************************************
+-- *                    Specifications and Assertions                     *
+-- ************************************************************************
+
+module SECRET_M
+
+  -- Specification for single secret
+
+  SECRET_SPEC_0(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ ->
+      (if member(Mallory, Bs_) then SECRET_SPEC_0(s_)
+       else SECRET_SPEC_1(s_))
+    []
+    leak.s_ -> SECRET_SPEC_0(s_)
+  SECRET_SPEC_1(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ -> SECRET_SPEC_1(s_)
+  -- Specification for all secrets
+
+  AlphaS(s_) = 
+    Union({
+      {|signal.Claim_Secret.A_.s_ | A_ <- ALL_PRINCIPALS|},
+      {leak.s_}
+    })
+  -- Sequential version; secs_ is secrets that intruder must not learn
+
+  SEQ_SECRET_SPEC_0(secs_) =
+    scs?s_!IntIn -> SEQ_SECRET_SPEC_0(secs_)
+    []
+    card(secs_)<2 & scs?s_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(union(secs_,{s_}))
+    []
+    card(secs_)==2 & scs?s_:secs_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(secs_)
+    []
+    leak?s_ : diff(ALL_SECRETS,secs_) -> SEQ_SECRET_SPEC_0(secs_)
+
+  isIntIn(S_) = if member(Mallory,S_) then IntIn else IntNotIn
+
+  Alpha_SECRETS =
+    Union({
+      {|leak, signal.Claim_Secret.A_ | A_ <- HONEST|}
+    })
+
+  Alpha_SEQ_SECRETS = 
+    Union({
+      {|leak, scs|}
+    })
+
+exports
+
+  (IK, Deductions) =
+   INTRUDER_M::Close_(ALGEBRA_M::applyRenamingToSet(INTRUDER_M::IK0), 
+           ALGEBRA_M::applyRenamingToDeductions(INTRUDER_M::Base_Deductions), 
+           ALGEBRA_M::applyRenamingToSet(INTRUDER_M::KnowableFact))
+
+  LearnableFact = diff(INTRUDER_M::KnowableFact, IK)
+
+  INTRUDER_0 =
+    INTRUDER_M::INTRUDER_00(Deductions,LearnableFact) \ {|infer,INTRUDER_M::tockInfer|}
+
+  SYSTEM =
+    SYSTEM_M::SYSTEM_0 [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER'(INTRUDER_0,IK)
+
+  SECRET_SPEC = (|| s_ : ALL_SECRETS @ [AlphaS(s_)] SECRET_SPEC_0(s_))
+
+  datatype IncInt = IntIn | IntNotIn
+
+  channel scs : ALL_SECRETS.IncInt
+
+  SEQ_SECRET_SPEC = SEQ_SECRET_SPEC_0({})
+
+  -- System for secrecy checking
+
+  SYSTEM_S = 
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+    SYSTEM
+      [[receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>))
+          <- signal.Claim_Secret.B.ALGEBRA_M::applyRenaming(kab).{A} |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, Timestamp.ts <- TimeStamp_renamed_,
+        member(ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)),SYSTEM_M::INPUT_MSG3)
+      ]] \ {| env, send, receive, tock |}
+
+  SYSTEM_S_SEQ =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+    SYSTEM
+      [[receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>))
+          <- scs.ALGEBRA_M::applyRenaming(kab).isIntIn({B, A}) |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, Timestamp.ts <- TimeStamp_renamed_,
+        member(ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)),SYSTEM_M::INPUT_MSG3)
+      ]] \ {| env, send, receive, tock |}
+
+endmodule
+
+-- Assertion of secrecy
+
+assert SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S
+assert SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ
+
+-- ************************************************************************
+-- *                    Authentication specifications                     *
+-- ************************************************************************
+
+module AUTH_COMMON
+  createRenaming(factsRenaming) =
+    let rn = relational_image(factsRenaming)
+        dom = {a_ | (a_, _) <- factsRenaming}
+        extract({x_}) = x_
+    within \ x_ @ if member(x_,dom) then extract(rn(x_)) else x_
+
+  -- The first argument is something of type createRenaming(X)
+  renameSet(f_, X_) =
+    {f_(x_) | x_ <- X_}
+  renameDeductions(rn_, ds_) =
+    {(rn_(f_), renameSet(rn_, fs_)) | (f_, fs_) <- ds_}
+
+exports
+  -- Given a set of pairs (f, f') first compute the closure (but excluding
+  -- any facts in factsToRename) of the intruder's initial knowledge and then
+  -- rename all facts that appear in Deductions and LearnableFact.
+  RenameClosure(factsRenaming,factsToRename) = 
+    let
+      rn_ = createRenaming(factsRenaming)
+      (IK_,ded_) =
+        INTRUDER_M::CloseButNotFacts_(
+          ALGEBRA_M::applyRenamingToSet(INTRUDER_M::IK0),
+          ALGEBRA_M::applyRenamingToDeductions(INTRUDER_M::Base_Deductions),
+          ALGEBRA_M::applyRenamingToSet(INTRUDER_M::KnowableFact),
+          factsToRename)
+      learnableFact = diff(INTRUDER_M::KnowableFact,IK_)
+    within
+      (renameDeductions(rn_,ded_), IK_, renameSet(rn_,learnableFact))
+
+  -- System to be used for checking authentication specifications
+  AUTH_SYSTEM(INTRUDER_0,IK) = 
+    SYSTEM_M::SYSTEM_0
+    [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER'(INTRUDER_0,IK)
+
+endmodule
+
+-- ************************************************************************
+-- *                 Authentication specification number 1                *
+-- ************************************************************************
+
+module AUTH1_M
+
+  -- Set of all facts that would be renamed to signals in infer events
+  FACTS_TO_RENAME = 
+    {Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) | 
+      Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- INTRUDER_M::KnowableFact}
+
+  -- Set of tuples of the form (Fact, RunningFact) that is used to create a
+  -- renaming function of type Fact -> RunningFact.
+  FACT_RENAMING =
+    {(Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>), AuthTaggedSignals1.TRunning1.<ts>.A.B.Internal)
+      | Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- FACTS_TO_RENAME,
+        v_2_ == v}
+
+  (RenamedDeductions_,IK,RenamedLearnableFact) =
+    AUTH_COMMON::RenameClosure(FACT_RENAMING,FACTS_TO_RENAME)
+
+  -- Build the basic (non-chased) intruder by renaming all the infer.(f,fs)
+  -- events corresponding to the messages that should be renamed.
+  INTRUDER_0 = 
+    INTRUDER_M::INTRUDER_00(RenamedDeductions,RenamedLearnableFact)
+      [[infer.(AuthTaggedSignals1.TRunning1.<ts>.A.B.tag_,fs_) <-
+         signal.Running1.INITIATOR_role.A.B
+        | (AuthTaggedSignals1.TRunning1.<ts>.A.B.tag_, fs_) <- RenamedDeductions,
+          member(A,inter(Agent,HONEST)), member(B, {Bob})
+      ]] \ {|infer,INTRUDER_M::tockInfer|}
+
+exports
+  RenamedDeductions = RenamedDeductions_
+
+  -- Datatypes below are what facts are renamed in in FACT_RENAMING above
+  datatype Tag1 = Internal | External1
+  datatype TaggedSignals1 = TRunning1.Seq(TS).ALL_PRINCIPALS.ALL_PRINCIPALS.Tag1
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateINITIATORToRESPONDERTimedNonInjectiveAgreement1 =
+    let
+      bInstance(B) =
+        signal.Running1.INITIATOR_role?A : inter(Agent,HONEST)!B ->
+          (let
+            countdown(-1) = STOP
+            countdown(n_) = 
+              tock -> countdown(n_-1)
+              [] signal.Commit1.RESPONDER_role.B.A -> RUN({signal.Commit1.RESPONDER_role.B.A,tock})
+          within countdown(1))
+      [] tock -> bInstance(B)
+      run(B) = 
+        signal.Running1.INITIATOR_role?A : inter(Agent,HONEST)!B -> 
+        run(B)
+    within
+      -- Number argument tuples so that duplicates are not eliminated
+      [| {tock} |] (_,B): {(1, Bob), (2, Bob)} @
+        sbisim(bInstance(B)) ||| run(B)
+
+  -- System for authentication checking
+
+  SYSTEM_1 =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+      AUTH_COMMON::AUTH_SYSTEM(INTRUDER_0,IK)
+       [[send.A.B.ALGEBRA_M::rmb((Msg3, v, <kab>)) <-
+          signal.Running1.INITIATOR_role.A.B,  
+        receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)) <-
+          signal.Commit1.RESPONDER_role.B.A |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, 
+            v <- ALGEBRA_M::applyRenamingToSet(addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})), 
+            Timestamp.ts <- TimeStamp_renamed_,
+            member(A,HONEST),
+            member((Msg3, v, <kab>),SYSTEM_M::OUTPUT_MSG3),
+            member((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>),SYSTEM_M::INPUT_MSG3)
+      ]]
+      \ {| env, leak, send, receive|}
+
+endmodule
+
+assert AUTH1_M::AuthenticateINITIATORToRESPONDERTimedNonInjectiveAgreement1 [T= 
+       AUTH1_M::SYSTEM_1
+
+-- ************************************************************************
+-- *                 Authentication specification number 2                *
+-- ************************************************************************
+
+module AUTH2_M
+
+  -- Set of all facts that would be renamed to signals in infer events
+  FACTS_TO_RENAME = 
+    {Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) | 
+      Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- INTRUDER_M::KnowableFact}
+
+  -- Set of tuples of the form (Fact, RunningFact) that is used to create a
+  -- renaming function of type Fact -> RunningFact.
+  FACT_RENAMING =
+    {(Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>), AuthTaggedSignals2.TRunning2.A.B.kab.Internal)
+      | Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- FACTS_TO_RENAME,
+        v_2_ == v}
+
+  (RenamedDeductions_,IK,RenamedLearnableFact) =
+    AUTH_COMMON::RenameClosure(FACT_RENAMING,FACTS_TO_RENAME)
+
+  -- Build the basic (non-chased) intruder by renaming all the infer.(f,fs)
+  -- events corresponding to the messages that should be renamed.
+  INTRUDER_0 = 
+    INTRUDER_M::INTRUDER_00(RenamedDeductions,RenamedLearnableFact)
+      [[infer.(AuthTaggedSignals2.TRunning2.A.B.kab.tag_,fs_) <-
+         signal.Running2.INITIATOR_role.A.B.kab
+        | (AuthTaggedSignals2.TRunning2.A.B.kab.tag_, fs_) <- RenamedDeductions,
+          member(A,inter(Agent,HONEST)), member(B, {Bob})
+      ]] \ {|infer,INTRUDER_M::tockInfer|}
+
+exports
+  RenamedDeductions = RenamedDeductions_
+
+  -- Datatypes below are what facts are renamed in in FACT_RENAMING above
+  datatype Tag2 = Internal | External1
+  datatype TaggedSignals2 = TRunning2.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey.Tag2
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_kab =
+    let
+      bInstance(B) =
+        signal.Running2.INITIATOR_role?A : inter(Agent,HONEST)!B?kab : {kab_S, SessionKey_S} ->
+          RUN({signal.Commit2.RESPONDER_role.B.A.kab})
+      run(B) = 
+        signal.Running2.INITIATOR_role?A : inter(Agent,HONEST)!B?kab -> 
+        run(B)
+    within
+      -- Number argument tuples so that duplicates are not eliminated
+      ||| (_,B): {(1, Bob), (2, Bob)} @
+        sbisim(bInstance(B)) ||| run(B)
+
+  -- System for authentication checking
+
+  SYSTEM_2 =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+      AUTH_COMMON::AUTH_SYSTEM(INTRUDER_0,IK)
+       [[send.A.B.ALGEBRA_M::rmb((Msg3, v, <kab>)) <-
+          signal.Running2.INITIATOR_role.A.B.kab,  
+        receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)) <-
+          signal.Commit2.RESPONDER_role.B.A.kab |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, 
+            v <- ALGEBRA_M::applyRenamingToSet(addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})), 
+            Timestamp.ts <- TimeStamp_renamed_,
+            member(A,HONEST),
+            member((Msg3, v, <kab>),SYSTEM_M::OUTPUT_MSG3),
+            member((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>),SYSTEM_M::INPUT_MSG3)
+      ]]
+      \ {| env, leak, send, receive, tock|}
+
+endmodule
+
+assert AUTH2_M::AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_kab [T= 
+       AUTH2_M::SYSTEM_2
+
+-- ************************************************************************
+-- *                 Authentication specification number 3                *
+-- ************************************************************************
+
+module AUTH3_M
+
+  -- Set of all facts that would be renamed to signals in infer events
+  FACTS_TO_RENAME = 
+    {Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) | 
+      Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- INTRUDER_M::KnowableFact}
+
+  -- Set of tuples of the form (Fact, RunningFact) that is used to create a
+  -- renaming function of type Fact -> RunningFact.
+  FACT_RENAMING =
+    {(Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>), AuthTaggedSignals3.TRunning3.<ts>.A.B.Internal)
+      | Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- FACTS_TO_RENAME,
+        v_2_ == v}
+
+  (RenamedDeductions_,IK,RenamedLearnableFact) =
+    AUTH_COMMON::RenameClosure(FACT_RENAMING,FACTS_TO_RENAME)
+
+  -- Build the basic (non-chased) intruder by renaming all the infer.(f,fs)
+  -- events corresponding to the messages that should be renamed.
+  INTRUDER_0 = 
+    INTRUDER_M::INTRUDER_00(RenamedDeductions,RenamedLearnableFact)
+      [[infer.(AuthTaggedSignals3.TRunning3.<ts>.A.B.tag_,fs_) <-
+         signal.Running3.INITIATOR_role.A.B
+        | (AuthTaggedSignals3.TRunning3.<ts>.A.B.tag_, fs_) <- RenamedDeductions,
+          member(A,inter(Agent,HONEST)), member(B, {Bob})
+      ]] \ {|infer,INTRUDER_M::tockInfer|}
+
+exports
+  RenamedDeductions = RenamedDeductions_
+
+  -- Datatypes below are what facts are renamed in in FACT_RENAMING above
+  datatype Tag3 = Internal | External1
+  datatype TaggedSignals3 = TRunning3.Seq(TS).ALL_PRINCIPALS.ALL_PRINCIPALS.Tag3
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateINITIATORToRESPONDERTimedAgreement1 =
+    let
+      bInstance(B) =
+        signal.Running3.INITIATOR_role?A : inter(Agent,HONEST)!B ->
+          (let
+            countdown(-1) = STOP
+            countdown(n_) = 
+              tock -> countdown(n_-1)
+              [] signal.Commit3.RESPONDER_role.B.A -> RUN({tock})
+          within countdown(1))
+      [] tock -> bInstance(B)
+      run(B) = 
+        signal.Running3.INITIATOR_role?A : inter(Agent,HONEST)!B -> 
+        run(B)
+    within
+      -- Number argument tuples so that duplicates are not eliminated
+      [| {tock} |] (_,B): {(1, Bob), (2, Bob)} @
+        sbisim(bInstance(B)) ||| run(B)
+
+  -- System for authentication checking
+
+  SYSTEM_3 =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+      AUTH_COMMON::AUTH_SYSTEM(INTRUDER_0,IK)
+       [[send.A.B.ALGEBRA_M::rmb((Msg3, v, <kab>)) <-
+          signal.Running3.INITIATOR_role.A.B,  
+        receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)) <-
+          signal.Commit3.RESPONDER_role.B.A |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, 
+            v <- ALGEBRA_M::applyRenamingToSet(addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})), 
+            Timestamp.ts <- TimeStamp_renamed_,
+            member(A,HONEST),
+            member((Msg3, v, <kab>),SYSTEM_M::OUTPUT_MSG3),
+            member((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>),SYSTEM_M::INPUT_MSG3)
+      ]]
+      \ {| env, leak, send, receive|}
+
+endmodule
+
+assert AUTH3_M::AuthenticateINITIATORToRESPONDERTimedAgreement1 [T= 
+       AUTH3_M::SYSTEM_3
+
+-- ************************************************************************
+-- *                 Authentication specification number 4                *
+-- ************************************************************************
+
+module AUTH4_M
+
+  -- Set of all facts that would be renamed to signals in infer events
+  FACTS_TO_RENAME = 
+    {Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) | 
+      Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- INTRUDER_M::KnowableFact}
+
+  -- Set of tuples of the form (Fact, RunningFact) that is used to create a
+  -- renaming function of type Fact -> RunningFact.
+  FACT_RENAMING =
+    {(Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>), AuthTaggedSignals4.TRunning4.A.B.kab.Internal)
+      | Sent.(v, <A, B, S, kab, Timestamp.ts, v_2_>) <- FACTS_TO_RENAME,
+        v_2_ == v}
+
+  (RenamedDeductions_,IK,RenamedLearnableFact) =
+    AUTH_COMMON::RenameClosure(FACT_RENAMING,FACTS_TO_RENAME)
+
+  -- Build the basic (non-chased) intruder by renaming all the infer.(f,fs)
+  -- events corresponding to the messages that should be renamed.
+  INTRUDER_0 = 
+    INTRUDER_M::INTRUDER_00(RenamedDeductions,RenamedLearnableFact)
+      [[infer.(AuthTaggedSignals4.TRunning4.A.B.kab.tag_,fs_) <-
+         signal.Running4.INITIATOR_role.A.B.kab
+        | (AuthTaggedSignals4.TRunning4.A.B.kab.tag_, fs_) <- RenamedDeductions,
+          member(A,inter(Agent,HONEST)), member(B, {Bob})
+      ]] \ {|infer,INTRUDER_M::tockInfer|}
+
+exports
+  RenamedDeductions = RenamedDeductions_
+
+  -- Datatypes below are what facts are renamed in in FACT_RENAMING above
+  datatype Tag4 = Internal | External1
+  datatype TaggedSignals4 = TRunning4.ALL_PRINCIPALS.ALL_PRINCIPALS.SessionKey.Tag4
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateINITIATORToRESPONDERAgreement_kab =
+    let
+      bInstance(B) =
+        signal.Running4.INITIATOR_role?A : inter(Agent,HONEST)!B?kab : {kab_S, SessionKey_S} ->
+          signal.Commit4.RESPONDER_role.B.A.kab -> STOP
+      run(B) = 
+        signal.Running4.INITIATOR_role?A : inter(Agent,HONEST)!B?kab -> 
+        run(B)
+    within
+      -- Number argument tuples so that duplicates are not eliminated
+      ||| (_,B): {(1, Bob), (2, Bob)} @
+        sbisim(bInstance(B)) ||| run(B)
+
+  -- System for authentication checking
+
+  SYSTEM_4 =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+    within
+      AUTH_COMMON::AUTH_SYSTEM(INTRUDER_0,IK)
+       [[send.A.B.ALGEBRA_M::rmb((Msg3, v, <kab>)) <-
+          signal.Running4.INITIATOR_role.A.B.kab,  
+        receive.A.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>)) <-
+          signal.Commit4.RESPONDER_role.B.A.kab |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, 
+            v <- ALGEBRA_M::applyRenamingToSet(addGarbage_({Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>) | A <- Agent, B <- Agent, kab <- SessionKey, ts <- TS})), 
+            Timestamp.ts <- TimeStamp_renamed_,
+            member(A,HONEST),
+            member((Msg3, v, <kab>),SYSTEM_M::OUTPUT_MSG3),
+            member((Msg3, Encrypt.(SKey__.(B), <kab, A, Timestamp.ts>), <kab>),SYSTEM_M::INPUT_MSG3)
+      ]]
+      \ {| env, leak, send, receive, tock|}
+
+endmodule
+
+assert AUTH4_M::AuthenticateINITIATORToRESPONDERAgreement_kab [T= 
+       AUTH4_M::SYSTEM_4
+

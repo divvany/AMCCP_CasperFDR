@@ -1,0 +1,11 @@
+Using FDR Version 4.2.3 copyright 2016 Oxford University Innovation Ltd. All Rights Reserved.
+Loading ./documents/file.csp
+Checking:AUTH1_M::AuthenticateINITIATORToRESPONDERTimedAgreement2
+    [T= AUTH1_M::SYSTEM_1
+Result:Passed, found 0 counterexamples
+Checking:AUTH2_M::AuthenticateINITIATORToRESPONDERAgreement
+    [T= AUTH2_M::SYSTEM_2
+Result:Passed, found 0 counterexamples
+Checking:AUTH3_M::AuthenticateRESPONDERToINITIATORAgreement
+    [T= AUTH3_M::SYSTEM_3
+Result:Passed, found 0 counterexamples

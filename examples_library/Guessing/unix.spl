@@ -1,0 +1,53 @@
+-- Needham Schroeder Public Key Protocol, 3 message version
+
+#Free variables
+
+a : Agent
+s : Server
+passwd : Agent x Server -> Password
+PK : Agent -> PublicKey
+SK : Agent -> SecretKey
+pka : PublicKey
+ska : SecretKey
+InverseKeys = (PK, SK), (passwd,passwd), (pka,ska)
+
+#Processes
+
+INITIATOR(a,s) knows  passwd(a,s)
+SERVER(s) knows PK, SK(a), passwd(a,s)
+
+#Protocol description
+
+1.  a -> s : a
+2.  s -> a : PK(a) % pka, {SK(a) % ska}{passwd(a,s)}
+3.  a -> s : {a}{ska % SK(a)}
+-- The last message is necessary to make SK(a) recognised as a key
+
+#Specification
+
+-- FAIL
+Secret(a, passwd(a,s), [s])
+-- FAIL
+Secret(s, passwd(a,s), [a])
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+Sam : Server
+
+#Functions
+
+symbolic PK, SK, passwd
+
+#System
+
+INITIATOR(Alice, Sam)
+SERVER(Sam)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, PK, SK(Mallory), passwd(Mallory, Sam)}
+
+-- FAIL
+Guessable = Password

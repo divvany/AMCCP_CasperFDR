@@ -1,0 +1,1506 @@
+-- CSP script produced using Casper version 2.0
+
+-- -- SAML Single Sign On (SSO) protocol
+-- 
+-- #Free variables
+-- u : User
+-- sp : ServiceProvider
+-- idp : IdProvider
+-- m : Message
+-- nidp : Nonce
+-- a : Artifact
+-- 
+-- PK : IdProvider -> PublicKey
+-- SK : IdProvider -> SecretKey
+-- 
+-- InverseKeys = (PK, SK)
+-- 
+-- #Protocol description
+-- 0.     -> u   : sp, idp
+-- 
+-- -- Request for a resource: I am 'u', I want to access 'sp'
+-- 1. u   -> idp : u, sp
+-- 
+-- -- <AuthnResponse>
+-- 2. idp -> u   : a, idp, sp, u
+-- 3. u   -> sp  : a, sp, idp, u
+-- 4. sp  -> idp : a, u, sp, idp
+-- 5. idp -> sp  : {u, sp, idp, nidp}{SK(idp)}
+-- 6. sp  -> u   : m
+-- 
+-- #Processes
+-- USER(u) knows PK
+-- SERVICEPROVIDER(sp, m) knows PK
+-- IDPROVIDER(idp, a, nidp) knows PK, SK(idp)
+-- 
+-- #Channels
+-- Session symmetric 1,2
+-- Session symmetric 3,6
+-- Session symmetric 4,5
+-- 
+-- 1 C NF NRA- NR-
+-- 2 C NF NRA- NR-
+-- 3 C NR-
+-- 4 C NF NRA- NR-
+-- 5 C NF NRA- NR-
+-- 6 C NF NRA- NR-
+-- 
+-- #Specification
+-- -- PASS
+-- Secret(sp, m, [u])
+-- -- PASS
+-- Secret(u, m, [sp])
+-- 
+-- -- PASS
+-- Agreement(sp, idp, [u, a])
+-- -- PASS
+-- Agreement(idp, sp, [u, a, nidp])
+-- -- PASS
+-- Agreement(sp, u, [m, idp])
+-- -- PASS
+-- Agreement(u, sp, [idp])
+-- -- The test below fails because a dishonest sp can just not check with the
+-- -- idp and just send message 6.
+-- -- FAIL
+-- Agreement(idp, u, [sp])
+-- -- PASS
+-- Agreement(u, idp, [sp])
+-- 
+-- #Actual variables
+-- Alice, Mallory : User
+-- Dustin, Mallory : ServiceProvider
+-- Sam : IdProvider
+-- M, M', Mm : Message
+-- A, A', Am : Artifact
+-- Nidp, Nidp', Nm : Nonce
+-- 
+-- #Functions
+-- symbolic PK, SK
+-- 
+-- #System
+-- USER(Alice); USER(Alice)
+-- SERVICEPROVIDER(Dustin, M); SERVICEPROVIDER(Dustin, M')
+-- IDPROVIDER(Sam, A, Nidp); IDPROVIDER(Sam, A', Nidp')
+-- 
+-- #Intruder Information
+-- Intruder = Mallory
+-- IntruderKnowledge = {Alice, Dustin, Mallory, Sam, Am, Nm, Mm, PK}
+
+-- ************************************************************************
+-- *                                Types                                 *
+-- ************************************************************************
+
+-- Main datatype, representing all possible messages
+
+datatype Encryption =
+  Alice | Mallory | Dustin | Sam | M | M' | Mm | A | A' | Am | Nidp | Nidp' | 
+  Nm | Garbage | PK__.IdProvider | SK__.IdProvider | Sq.Seq(Encryption) | 
+  Encrypt.(ALL_KEYS,Seq(Encryption)) | Hash.(HashFunction, Seq(Encryption)) | 
+  Xor.(Encryption, Encryption) | 
+  SentTo.(ALL_PRINCIPALS, SessionIds, Encryption) | 
+  SentByTo.(ALL_PRINCIPALS, ALL_PRINCIPALS, SessionIds, Encryption) | 
+  SentByToC.(ALL_PRINCIPALS, ALL_PRINCIPALS, SessionIds, Encryption)
+
+-- All keys and hashfunctions in the system
+
+ALL_KEYS :: {Encryption}
+ALL_KEYS = SecretKey
+
+ASYMMETRIC_KEYS = {k_, inverse(k_) | k_ <- ALL_KEYS, k_!=inverse(k_)}
+HashFunction :: {Encryption}
+HashFunction = {}
+
+-- All atoms in the system
+
+ATOM = {Alice, Mallory, Dustin, Sam, M, M', Mm, A, A', Am, Nidp, Nidp', Nm, 
+         Garbage}
+
+-- Some standard functions
+
+channel dummyrun_
+RUN(X_) = 
+  let drun = dummyrun_ -> drun
+  within drun[[dummyrun_ <- x_ | x_ <- X_]]
+
+encrypt(m_,k_) = Encrypt.(k_,m_)
+decrypt(Encrypt.(k1_,m_),k_) = if k_ == inverse(k1_) then m_ else <Garbage>
+decrypt(_,_) = <Garbage>
+decryptable(Encrypt.(k1_,m_),k_) = k_ == inverse(k1_) 
+decryptable(_,_) = false
+nth(ms_,n_) = if n_ == 1 then head(ms_) else nth(tail(ms_), n_ - 1)
+
+-- add Garbage to a set that contains and encryption,
+-- hash function application of Vernam encryption
+
+addGarbage_(S_) =
+  if S_=={} then {Garbage}
+  else Union({S_, {Garbage | Encrypt._ <- S_}, 
+             {Garbage | Hash._ <- S_},
+             {Garbage | Xor._ <- S_}})
+
+-- Definitions of user supplied functions
+
+PK(arg_1_) = PK__.(arg_1_)
+SK(arg_1_) = SK__.(arg_1_)
+
+-- Inverses of functions
+
+inverse(PK__.arg_) = SK__.arg_
+inverse(SK__.arg_) = PK__.arg_
+
+-- Types in system
+
+User = {Alice, Mallory}
+ServiceProvider = {Dustin, Mallory}
+IdProvider = {Sam}
+Message = {M, M', Mm}
+Artifact = {A, A', Am}
+Nonce = {Nidp, Nidp', Nm}
+PublicKey = {PK(arg_1_) | arg_1_ <- IdProvider}
+SecretKey = {SK(arg_1_) | arg_1_ <- IdProvider}
+
+
+-- ************************************************************************
+-- *                               Messages                               *
+-- ************************************************************************
+
+-- Message labels
+
+datatype Labels =
+  Msg1 | Msg2 | Msg3 | Msg4 | Msg5 | Msg6 | Env0
+
+datatype SessionIds =
+	c_A1 | c_A2 | c_S3 | c_S4 | c_A5 | c_A6 | c_D7 | c_D8 | c_D9 | c_D10 | 
+  c_S11 | c_S12 | c_M
+
+SessionId(Msg1) = {c_A1, c_A2, c_M}
+SessionId(Msg2) = {c_S3, c_S4, c_M}
+SessionId(Msg3) = {c_A5, c_A6, c_M}
+SessionId(Msg4) = {c_D9, c_D10, c_M}
+SessionId(Msg5) = {c_S11, c_S12, c_M}
+SessionId(Msg6) = {c_D7, c_D8, c_M}
+
+
+MSG_BODY_0 = {ALGEBRA_M::applyRenaming(m_) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO}
+MSG_BODY_1 = 
+  {SentTo.(B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO3, B_ <- ALL_PRINCIPALS, c_ <- SessionIds}
+MSG_BODY_2 = {}
+MSG_BODY_3 = 
+  Union({
+    {SentByTo.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)), 
+ SentByToC.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO1, A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds},
+    {SentByTo.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)), 
+ SentByToC.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO2, A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds},
+    {SentByTo.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)), 
+ SentByToC.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO4, A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds},
+    {SentByTo.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)), 
+ SentByToC.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO5, A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds},
+    {SentByTo.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)), 
+ SentByToC.(A_, B_, c_, ALGEBRA_M::applyRenaming(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO6, A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds}
+  })
+MSG_BODY = Union({MSG_BODY_0, MSG_BODY_1, MSG_BODY_2, MSG_BODY_3})
+
+-- Type of principals
+
+ALL_PRINCIPALS = Union({User, IdProvider, ServiceProvider})
+
+INTRUDER = Mallory
+
+HONEST = diff(ALL_PRINCIPALS, {INTRUDER})
+
+-- Channel declarations
+
+INPUT_MSG = SYSTEM_M::INPUT_MSG
+OUTPUT_MSG = SYSTEM_M::OUTPUT_MSG
+DIRECT_MSG = SYSTEM_M::DIRECT_MSG
+ENV_MSG :: {(Labels, Encryption, <Encryption>)}
+ENV_MSG = SYSTEM_M::ENV_MSG
+
+channel receive: ALL_PRINCIPALS.ALL_PRINCIPALS.SessionIds.INPUT_MSG
+channel send: ALL_PRINCIPALS.ALL_PRINCIPALS.SessionIds.OUTPUT_MSG
+channel env : ALL_PRINCIPALS.ENV_MSG
+channel error
+channel start, close : HONEST.HONEST_ROLE
+
+channel leak : addGarbage_(ALL_SECRETS)
+-- Roles of agents
+
+datatype ROLE = USER_role | SERVICEPROVIDER_role | IDPROVIDER_role
+
+HONEST_ROLE = ROLE
+
+-- Secrets in the protocol
+
+ALL_SECRETS_0 = Message
+ALL_SECRETS = addGarbage_(ALGEBRA_M::applyRenamingToSet(ALL_SECRETS_0))
+
+-- Define type of signals, and declare signal channel
+
+datatype Signal = 
+  Claim_Secret.ALL_PRINCIPALS.ALL_SECRETS.Set(ALL_PRINCIPALS) |
+  Running1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact |
+  Commit1.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact |
+  RunCom1.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact.User.Artifact |
+  Running2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact.Nonce |
+  Commit2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact.Nonce |
+  RunCom2.ALL_PRINCIPALS.ALL_PRINCIPALS.User.Artifact.Nonce.User.Artifact.Nonce |
+  Running3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.Message.IdProvider |
+  Commit3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.Message.IdProvider |
+  RunCom3.ALL_PRINCIPALS.ALL_PRINCIPALS.Message.IdProvider.Message.IdProvider |
+  Running4.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.IdProvider |
+  Commit4.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.IdProvider |
+  RunCom4.ALL_PRINCIPALS.ALL_PRINCIPALS.IdProvider.IdProvider |
+  Running5.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider |
+  Commit5.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider |
+  RunCom5.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider.ServiceProvider |
+  Running6.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider |
+  Commit6.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider |
+  RunCom6.ALL_PRINCIPALS.ALL_PRINCIPALS.ServiceProvider.ServiceProvider
+
+channel signal : Signal
+
+Fact_1 = 
+  Union({
+    {Garbage},
+    User,
+    ServiceProvider,
+    IdProvider,
+    Message,
+    Nonce,
+    Artifact,
+    SecretKey,
+    PublicKey,
+    {Encrypt.(SK__.(idp), <u, sp, idp, nidp>) |
+       idp <- IdProvider, nidp <- Nonce, sp <- ServiceProvider, u <- User},
+    {Sq.<sp, idp> |
+       idp <- IdProvider, sp <- ServiceProvider},
+    {Sq.<u, sp> |
+       sp <- ServiceProvider, u <- User},
+    {Sq.<a, idp, sp, u> |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User},
+    {Sq.<a, sp, idp, u> |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User},
+    {Sq.<a, u, sp, idp> |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User},
+    {SentTo.(b_, c_, Sq.<a, sp, idp, u>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User, b_ <- INTRUDER_M::ReceiverType(Msg3), c_ <- SessionId(Msg3)},
+    {SentByTo.(a_, b_, c_, Sq.<u, sp>) |
+       sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg1), b_ <- INTRUDER_M::ReceiverType(Msg1), c_ <- SessionId(Msg1)},
+    {SentByTo.(a_, b_, c_, Sq.<a, idp, sp, u>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg2), b_ <- INTRUDER_M::ReceiverType(Msg2), c_ <- SessionId(Msg2)},
+    {SentByTo.(a_, b_, c_, Sq.<a, u, sp, idp>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg4), b_ <- INTRUDER_M::ReceiverType(Msg4), c_ <- SessionId(Msg4)},
+    {SentByTo.(a_, b_, c_, Encrypt.(SK__.(idp), <u, sp, idp, nidp>)) |
+       idp <- IdProvider, nidp <- Nonce, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg5), b_ <- INTRUDER_M::ReceiverType(Msg5), c_ <- SessionId(Msg5)},
+    {SentByTo.(a_, b_, c_, m) |
+       m <- Message, a_ <- INTRUDER_M::SenderType(Msg6), b_ <- INTRUDER_M::ReceiverType(Msg6), c_ <- SessionId(Msg6)},
+    {SentByToC.(a_, b_, c_, Sq.<u, sp>) |
+       sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg1), b_ <- INTRUDER_M::ReceiverType(Msg1), c_ <- SessionId(Msg1)},
+    {SentByToC.(a_, b_, c_, Sq.<a, idp, sp, u>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg2), b_ <- INTRUDER_M::ReceiverType(Msg2), c_ <- SessionId(Msg2)},
+    {SentByToC.(a_, b_, c_, Sq.<a, u, sp, idp>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg4), b_ <- INTRUDER_M::ReceiverType(Msg4), c_ <- SessionId(Msg4)},
+    {SentByToC.(a_, b_, c_, Encrypt.(SK__.(idp), <u, sp, idp, nidp>)) |
+       idp <- IdProvider, nidp <- Nonce, sp <- ServiceProvider, u <- User, a_ <- INTRUDER_M::SenderType(Msg5), b_ <- INTRUDER_M::ReceiverType(Msg5), c_ <- SessionId(Msg5)},
+    {SentByToC.(a_, b_, c_, m) |
+       m <- Message, a_ <- INTRUDER_M::SenderType(Msg6), b_ <- INTRUDER_M::ReceiverType(Msg6), c_ <- SessionId(Msg6)}
+  })
+
+external relational_inverse_image
+external relational_image
+transparent chase
+transparent sbisim
+
+-- ************************************************************************
+-- *                            Honest Agents                             *
+-- ************************************************************************
+
+module SYSTEM_M
+
+  -- types of messages sent and received by agents, as they are
+  -- considered by those agents
+
+  input_proj((l_,m_,se_,re_)) = (l_,m_,re_)
+  rmb_input_proj((l_,m_,se_,re_)) = ALGEBRA_M::rmb((l_,m_,re_))
+  output_proj((l_,m_,se_,re_)) = (l_,m_,se_)
+
+  INPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  INPUT_INT_MSG = 
+    
+    Union({
+      INPUT_INT_MSG1,
+      INPUT_INT_MSG2,
+      INPUT_INT_MSG3,
+      INPUT_INT_MSG4,
+      INPUT_INT_MSG5,
+      INPUT_INT_MSG6
+    })
+
+  OUTPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  OUTPUT_INT_MSG = 
+    
+    Union({
+      OUTPUT_INT_MSG1,
+      OUTPUT_INT_MSG2,
+      OUTPUT_INT_MSG3,
+      OUTPUT_INT_MSG4,
+      OUTPUT_INT_MSG5,
+      OUTPUT_INT_MSG6
+    })
+
+  -- USER
+
+  USER_0(u, c1, c3) =
+    [] idp : IdProvider @ [] sp : ServiceProvider @ 
+      env_I.u.(Env0, Sq.<sp, idp>,<>) ->
+    output.u.idp.c1.(Msg1, Sq.<u, sp>,<>) ->
+    [] c2 : SessionId(Msg2) @ pair.c1.c2 -> [] a : Artifact @ 
+      input.idp.u.c2.(Msg2, Sq.<a, idp, sp, u>,<>) ->
+    output.u.sp.c3.(Msg3, Sq.<a, sp, idp, u>,<idp>) ->
+    [] c6 : SessionId(Msg6) @ pair.c3.c6 -> [] m : Message @ 
+      input.sp.u.c6.(Msg6, m,<m, idp>) ->
+    SKIP
+
+  USER_1(u, c1, c3) = USER_0(u, c1, c3)
+
+  USER(u, c1, c3) =
+    USER_1(u, c1, c3)
+      [[input.idp.u.c_.(l_,m_,re_) <- receive.idp.u.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          idp <- IdProvider, (l_,m_,se_,re_) <- INT_MSG_INFO2, c_ <- SessionIds]]
+      [[input.sp.u.c_.(l_,m_,re_) <- receive.sp.u.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          sp <- ServiceProvider, (l_,m_,se_,re_) <- INT_MSG_INFO6, c_ <- SessionIds]]
+      [[output.u.idp.c_.(l_,m_,se_) <- send.u.idp.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          idp <- IdProvider, (l_,m_,se_,re_) <- INT_MSG_INFO1, c_ <- SessionIds]]
+      [[output.u.sp.c_.(l_,m_,se_) <- send.u.sp.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          sp <- ServiceProvider, (l_,m_,se_,re_) <- INT_MSG_INFO3, c_ <- SessionIds]]
+      [[env_I.u.m_ <- env.u.ALGEBRA_M::rmb(m_) |
+          m_ <- ENV_INT_MSG0]]
+
+  -- SERVICEPROVIDER
+
+  SERVICEPROVIDER_0(sp, m, c6, c4) =
+    [] c3 : SessionId(Msg3) @ [] a : Artifact @ [] idp : IdProvider @ 
+    [] u : User @ 
+      input.u.sp.c3.(Msg3, Sq.<a, sp, idp, u>,<>) ->
+    output.sp.idp.c4.(Msg4, Sq.<a, u, sp, idp>,<u, a>) ->
+    [] c5 : SessionId(Msg5) @ pair.c4.c5 -> [] nidp : Nonce @ 
+      input.idp.sp.c5.(Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>),<>) ->
+    pair.c3.c6 -> output.sp.u.c6.(Msg6, m,<idp, a, nidp, m>) ->
+    SKIP
+
+  SERVICEPROVIDER_1(sp, m, c6, c4) = SERVICEPROVIDER_0(sp, m, c6, c4)
+
+  SERVICEPROVIDER(sp, m, c6, c4) =
+    SERVICEPROVIDER_1(sp, m, c6, c4)
+      [[input.u.sp.c_.(l_,m_,re_) <- receive.u.sp.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          u <- User, (l_,m_,se_,re_) <- INT_MSG_INFO3, c_ <- SessionIds]]
+      [[input.idp.sp.c_.(l_,m_,re_) <- receive.idp.sp.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          idp <- IdProvider, (l_,m_,se_,re_) <- INT_MSG_INFO5, c_ <- SessionIds]]
+      [[output.sp.idp.c_.(l_,m_,se_) <- send.sp.idp.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          idp <- IdProvider, (l_,m_,se_,re_) <- INT_MSG_INFO4, c_ <- SessionIds]]
+      [[output.sp.u.c_.(l_,m_,se_) <- send.sp.u.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          u <- User, (l_,m_,se_,re_) <- INT_MSG_INFO6, c_ <- SessionIds]]
+
+  -- IDPROVIDER
+
+  IDPROVIDER_0(idp, a, nidp, c2, c5) =
+    [] c1 : SessionId(Msg1) @ [] sp : ServiceProvider @ [] u : User @ 
+      input.u.idp.c1.(Msg1, Sq.<u, sp>,<>) ->
+    pair.c1.c2 -> output.idp.u.c2.(Msg2, Sq.<a, idp, sp, u>,<>) ->
+    [] c4 : SessionId(Msg4) @ 
+      input.sp.idp.c4.(Msg4, Sq.<a, u, sp, idp>,<>) ->
+    pair.c4.c5 -> output.idp.sp.c5.(Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>),<u, a, nidp>) ->
+    SKIP
+
+  IDPROVIDER_1(idp, a, nidp, c2, c5) = IDPROVIDER_0(idp, a, nidp, c2, c5)
+
+  IDPROVIDER(idp, a, nidp, c2, c5) =
+    IDPROVIDER_1(idp, a, nidp, c2, c5)
+      [[input.u.idp.c_.(l_,m_,re_) <- receive.u.idp.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          u <- User, (l_,m_,se_,re_) <- INT_MSG_INFO1, c_ <- SessionIds]]
+      [[input.sp.idp.c_.(l_,m_,re_) <- receive.sp.idp.c_.ALGEBRA_M::rmb((l_,m_,re_)) |
+          sp <- ServiceProvider, (l_,m_,se_,re_) <- INT_MSG_INFO4, c_ <- SessionIds]]
+      [[output.idp.u.c_.(l_,m_,se_) <- send.idp.u.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          u <- User, (l_,m_,se_,re_) <- INT_MSG_INFO2, c_ <- SessionIds]]
+      [[output.idp.sp.c_.(l_,m_,se_) <- send.idp.sp.c_.ALGEBRA_M::rmb((l_,m_,se_)) |
+          sp <- ServiceProvider, (l_,m_,se_,re_) <- INT_MSG_INFO5, c_ <- SessionIds]]
+
+  -- Process representing Alice
+
+  Alpha_USER_Alice = 
+    Union({
+      {|env.Alice.m_ | m_ <- ENV_MSG0|},
+      {|send.Alice.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG1, c_ <- SessionIds|},
+      {|send.Alice.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG3, c_ <- SessionIds|},
+      {|receive.A_.Alice.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2, c_ <- SessionIds|},
+      {|receive.A_.Alice.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG6, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_A1, c_A5, c_A2, c_A6} |}
+    })
+
+  USER_Alice = (USER(Alice, c_A1, c_A5) ; USER(Alice, c_A2, c_A6) ; STOP)
+
+  Alpha_Alice = 
+    Union({
+      {|env.Alice|},
+      {|send.Alice.A_.c_ | A_ <- ALL_PRINCIPALS, c_ <- SessionIds|},
+      {|receive.A_.Alice.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2, c_ <- SessionIds|},
+      {|receive.A_.Alice.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG6, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_A1, c_A2, c_A5, c_A6} |}
+    })
+
+  AGENT_Alice =
+    (USER_Alice [Alpha_USER_Alice || {} ] STOP)
+
+  -- Process representing Dustin
+
+  Alpha_SERVICEPROVIDER_Dustin = 
+    Union({
+      {|send.Dustin.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG4, c_ <- SessionIds|},
+      {|send.Dustin.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG6, c_ <- SessionIds|},
+      {|receive.A_.Dustin.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3, c_ <- SessionIds|},
+      {|receive.A_.Dustin.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_D7, c_D9, c_D8, c_D10} |}
+    })
+
+  SERVICEPROVIDER_Dustin = (SERVICEPROVIDER(Dustin, M, c_D7, c_D9) ; SERVICEPROVIDER(Dustin, M', c_D8, c_D10) ; STOP)
+
+  Alpha_Dustin = 
+    Union({
+      {|env.Dustin|},
+      {|send.Dustin.A_.c_ | A_ <- ALL_PRINCIPALS, c_ <- SessionIds|},
+      {|receive.A_.Dustin.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3, c_ <- SessionIds|},
+      {|receive.A_.Dustin.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_D7, c_D8, c_D9, c_D10} |}
+    })
+
+  AGENT_Dustin =
+    (SERVICEPROVIDER_Dustin [Alpha_SERVICEPROVIDER_Dustin || {} ] STOP)
+
+  -- Process representing Sam
+
+  Alpha_IDPROVIDER_Sam = 
+    Union({
+      {|send.Sam.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG2, c_ <- SessionIds|},
+      {|send.Sam.A_.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG5, c_ <- SessionIds|},
+      {|receive.A_.Sam.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1, c_ <- SessionIds|},
+      {|receive.A_.Sam.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG4, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_S3, c_S11, c_S4, c_S12} |}
+    })
+
+  IDPROVIDER_Sam = (IDPROVIDER(Sam, A, Nidp, c_S3, c_S11) ; IDPROVIDER(Sam, A', Nidp', c_S4, c_S12) ; STOP)
+
+  Alpha_Sam = 
+    Union({
+      {|env.Sam|},
+      {|send.Sam.A_.c_ | A_ <- ALL_PRINCIPALS, c_ <- SessionIds|},
+      {|receive.A_.Sam.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1, c_ <- SessionIds|},
+      {|receive.A_.Sam.c_.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG4, c_ <- SessionIds|},
+      {|pair.c_A, pair.c_.c_A | c_ <- SessionIds, c_A <- {c_S3, c_S4, c_S11, c_S12} |}
+    })
+
+  AGENT_Sam =
+    (IDPROVIDER_Sam [Alpha_IDPROVIDER_Sam || {} ] STOP)
+
+exports
+
+  -- Messages as they appear on the network; each messages is renamed
+  -- (by rmb) to the representative member of its equivalence class
+
+  INPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG1}
+  INPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG2}
+  INPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG3}
+  INPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG4}
+  INPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG5}
+  INPUT_MSG6 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG6}
+
+  OUTPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG1}
+  OUTPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG2}
+  OUTPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG3}
+  OUTPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG4}
+  OUTPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG5}
+  OUTPUT_MSG6 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG6}
+
+  DIRECT_MSG1 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO1}
+  DIRECT_MSG2 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO2}
+  DIRECT_MSG3 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO3}
+  DIRECT_MSG4 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO4}
+  DIRECT_MSG5 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO5}
+  DIRECT_MSG6 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO6}
+
+  -- Environmental messages
+
+  ENV_INT_MSG0 :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG0 = 
+    {(Env0, Sq.<sp, idp>, <>) |
+       idp <- IdProvider, sp <- ServiceProvider}
+
+  ENV_MSG0 = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG0}
+
+  ENV_INT_MSG :: {(Labels, Encryption, <Encryption>)}
+  ENV_INT_MSG = ENV_INT_MSG0
+
+  -- information about messages sent and received by agents, including
+  -- extras fields for both agents
+
+  INT_MSG_INFO1 = 
+    {(Msg1, Sq.<u, sp>, <>, <>) |
+       sp <- ServiceProvider, u <- User}
+  INT_MSG_INFO2 = 
+    {(Msg2, Sq.<a, idp, sp, u>, <>, <>) |
+       a <- Artifact, idp <- IdProvider, sp <- ServiceProvider, u <- User}
+  INT_MSG_INFO3 = 
+    {(Msg3, Sq.<a, sp, idp, u>, <idp>, <>) |
+       idp <- IdProvider, a <- Artifact, sp <- ServiceProvider, u <- User}
+  INT_MSG_INFO4 = 
+    {(Msg4, Sq.<a, u, sp, idp>, <u, a>, <>) |
+       u <- User, a <- Artifact, idp <- IdProvider, sp <- ServiceProvider}
+  INT_MSG_INFO5 = 
+    {(Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>), <u, a, nidp>, <>) |
+       u <- User, a <- Artifact, nidp <- Nonce, idp <- IdProvider, 
+       sp <- ServiceProvider}
+  INT_MSG_INFO6 = 
+    {(Msg6, m, <idp, a, nidp, m>, <m, idp_X_>) |
+       idp <- IdProvider, a <- Artifact, nidp <- Nonce, m <- Message, 
+       idp_X_ <- IdProvider}
+
+  ENV_MSG = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG}
+
+  INT_MSG_INFO :: {(Labels, Encryption, <Encryption>, <Encryption>)}
+  INT_MSG_INFO = 
+    Union({
+      INT_MSG_INFO1,
+      INT_MSG_INFO2,
+      INT_MSG_INFO3,
+      INT_MSG_INFO4,
+      INT_MSG_INFO5,
+      INT_MSG_INFO6
+    })
+  INPUT_INT_MSG1 = { input_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  INPUT_INT_MSG2 = { input_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  INPUT_INT_MSG3 = { input_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  INPUT_INT_MSG4 = { input_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  INPUT_INT_MSG5 = { input_proj(mt_) | mt_ <- INT_MSG_INFO5 }
+  INPUT_INT_MSG6 = { input_proj(mt_) | mt_ <- INT_MSG_INFO6 }
+
+  INPUT_MSG = 
+    Union({
+      INPUT_MSG1,
+      INPUT_MSG2,
+      INPUT_MSG3,
+      INPUT_MSG4,
+      INPUT_MSG5,
+      INPUT_MSG6
+    })
+  OUTPUT_INT_MSG1 = { output_proj(mt_) | mt_ <- INT_MSG_INFO1 }
+  OUTPUT_INT_MSG2 = { output_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  OUTPUT_INT_MSG3 = { output_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  OUTPUT_INT_MSG4 = { output_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  OUTPUT_INT_MSG5 = { output_proj(mt_) | mt_ <- INT_MSG_INFO5 }
+  OUTPUT_INT_MSG6 = { output_proj(mt_) | mt_ <- INT_MSG_INFO6 }
+
+  OUTPUT_MSG = 
+    Union({
+      OUTPUT_MSG1,
+      OUTPUT_MSG2,
+      OUTPUT_MSG3,
+      OUTPUT_MSG4,
+      OUTPUT_MSG5,
+      OUTPUT_MSG6
+    })
+  DIRECT_MSG = 
+  Union({
+    DIRECT_MSG1,
+    DIRECT_MSG2,
+    DIRECT_MSG3,
+    DIRECT_MSG4,
+    DIRECT_MSG5,
+    DIRECT_MSG6
+  })
+
+  channel input:ALL_PRINCIPALS.ALL_PRINCIPALS.SessionIds.INPUT_INT_MSG
+  channel output: ALL_PRINCIPALS.ALL_PRINCIPALS.SessionIds.OUTPUT_INT_MSG
+  channel env_I : ALL_PRINCIPALS.ENV_INT_MSG
+  channel pair : SessionIds.SessionIds
+
+  -- Complete system
+
+  SYSTEM_00 =
+    (AGENT_Alice
+      [Alpha_Alice||union(Alpha_Dustin, Alpha_Sam)]
+    (AGENT_Dustin
+      [Alpha_Dustin||Alpha_Sam]
+    AGENT_Sam))
+
+  SYSTEM_0 = SYSTEM_00 \ {|pair|}
+
+endmodule
+
+-- ************************************************************************
+-- *                               Algebra                                *
+-- ************************************************************************
+
+module ALGEBRA_M
+
+  -- Algebraic laws, defined as a set of pairs
+
+  laws = {(Garbage, Garbage)}
+
+  -- Calculate transitive closure of algebraic laws, and select
+  -- representative member of each equivalence class
+
+  external mtransclose
+  renaming = mtransclose(laws, Fact_1)
+  ren = relational_inverse_image(renaming)
+
+  -- function that renames non-sequential fact to representative member
+
+  applyRenaming0(a_) =
+    let S_ = ren(a_)
+    within if card(S_)==0 then a_ else elsing(S_)
+
+  elsing({x_}) = x_
+
+  domain = {a_ | (_,a_) <- renaming}
+
+exports
+
+  -- function that renames arbitrary fact to representative member
+
+  applyRenaming(Sq.ms_) =
+    if member(Sq.ms_, Fact_1) then applyRenaming0(Sq.ms_) 
+    else Sq.<applyRenaming0(m_) | m_ <- ms_>
+  applyRenaming(a_) = applyRenaming0(a_)
+
+  -- function that renames (label, fact, extras) triples
+
+  rmb((l_,m_,extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(extras_))
+  rmb4((l_,m_,s_extras_,r_extras_)) = 
+    (l_, applyRenaming(m_), applyRenamingToSeq(s_extras_), 
+     applyRenamingToSeq(r_extras_))
+
+  -- lift renaming to sets and to deductions
+
+  applyRenamingToSet(X_) =
+    union({elsing(ren(a_)) | a_ <- inter(X_,domain)},  diff(X_, domain))
+
+  applyRenamingToSeq(X_) = <applyRenaming(e_) | e_ <- X_>
+
+  applyRenamingToDeductions(S_) =
+    {(applyRenaming0(f_), applyRenamingToSet(X_)) | (f_,X_) <- S_}
+
+endmodule
+
+-- ************************************************************************
+-- *                             The Intruder                             *
+-- ************************************************************************
+
+module INTRUDER_M
+
+  -- Intruder's deductions
+
+  unSq_ (Sq.ms_) = set(ms_)
+  unSq_ (m_) = {m_}
+
+  unknown_(S_) = diff(S_, IK0)
+
+  Base_Deductions_ =
+    Union({SqDeductions, UnSqDeductions, 
+           EncryptionDeductions, DecryptionDeductions,
+           VernEncDeductions, VernDecDeductions, 
+           FnAppDeductions, HashDeductions, UserDeductions, SentToDeductions, SentByToDeductions, SentByToCDeductions})
+
+  SentToDeductions = {(SentTo.(a_, c_, m_), {SentTo.(a_, c_, m_)}) | SentTo.(a_, c_, m_) <- Fact_1}
+
+  SentByToDeductions = Union({
+    {(SentByTo.(a_, b_, c_, m_), {SentByTo.(a_, b_, c_, m_)}) | SentByTo.(a_, b_, c_, m_) <- Fact_1}, 
+    {(m_, {SentByTo.(a_, b_, c_, m_)}) | SentByTo.(a_, b_, c_, m_) <- Fact_1} 
+  })
+
+  SentByToCDeductions = Union({
+    {(SentByToC.(a_, b_, c_, m_), {SentByToC.(a_, b_, c_, m_)}) | SentByToC.(a_, b_, c_, m_) <- Fact_1}  })
+
+  SqDeductions =
+    {(Sq.fs_, unknown_(set(fs_))) | Sq.fs_ <- Fact_1}
+
+  UnSqDeductions =
+    {(f_, unknown_({Sq.fs_})) | Sq.fs_ <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  EncryptionDeductions =
+    {(Encrypt.(k_,fs_), unknown_(union({k_}, set(fs_)))) | 
+        Encrypt.(k_,fs_) <- Fact_1}
+
+  DecryptionDeductions =
+    {(f_, unknown_({Encrypt.(k_,fs_), inverse(k_)})) |
+        Encrypt.(k_,fs_) <- Fact_1, f_ <- unknown_(set(fs_))}
+
+  VernEncDeductions =
+    {(Xor.(m1_,m2_), unknown_(union(unSq_(m1_), unSq_(m2_)))) | 
+        Xor.(m1_,m2_) <- Fact_1}
+
+  VernDecDeductions =
+      {(m11_, union(unknown_(unSq_(m2_)), {Xor.(m1_,m2_)})) | 
+         Xor.(m1_,m2_) <- Fact_1, m11_ <- unSq_(m1_)}
+
+  HashDeductions = {(Hash.(f_, ms_), set(ms_)) | Hash.(f_, ms_) <- Fact_1}
+
+  UserDeductions = {}
+
+  FnAppDeductions = 
+    {(PK__.arg_1_, unknown_({arg_1_})) |
+        PK__.arg_1_ <- Fact_1}
+
+  -- close up intruder's initial knowledge under deductions;
+  -- calculate which facts cannot be learnt
+
+  components_(Sq.ms_) = 
+    if member(Sq.ms_, Fact_1) then {Sq.ms_} else set(ms_)
+  components_(m_) = {m_}
+
+  Seeable_ = 
+    Union({unknown_(components_(m_)) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO})
+
+  (IK1, Deductions_, KnowableFact_) = 
+    Close_(ALGEBRA_M::applyRenamingToSet(IK0), 
+           ALGEBRA_M::applyRenamingToDeductions(Base_Deductions), 
+           ALGEBRA_M::applyRenamingToSet(Fact_1))
+
+  LearnableFact = diff(KnowableFact, IK1)
+
+  -- The intruder
+
+  -- * leak is used to signal that a possible secret has been learnt
+  -- * hear and say are used to represent hearing or saying a message
+  -- * infer(f,fs) represent deducing fact f from the set of facts fs
+
+  -- Component of intruder for currently unknown fact f_:
+  -- * ms_ is the set of messages that contain f_ at the top level
+  -- * fss_ is the set of sets of facts from which f_ can be deduced
+  -- * ds_ is the set of deductions that use f_
+
+  IGNORANT(f_,ms_,fss_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    []
+    ([] fs_ : fss_, not(member(f_,fs_)) @ 
+        infer.(f_,fs_) -> KNOWS(f_,ms_,ds_))
+
+  -- Component of intruder for known fact f_
+
+  KNOWS(f_,ms_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    []
+    say?m_:ms_ -> KNOWS(f_,ms_,ds_)
+    [] 
+    ([] ded@@(f1_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,ds_))
+    []
+    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,ds_)
+
+  -- Alphabet of this component
+
+  AlphaL(f_,ms_,fss_,ds_) =
+    Union({(if member(f_,ALL_SECRETS) then {leak.f_} else {}),
+           {hear.m_, say.m_ | m_ <- ms_},
+           {infer.(f_,fs_) | fs_ <- fss_},
+           {infer.(f1_,fs_) | (f1_,fs_) <- ds_}
+         })
+
+  -- Set of all (f_, ms_, fss_, ds_) for which intruder components 
+  -- must be built
+
+  f_ms_fss_ds_s(Deductions,LearnableFact) = 
+    let rid_ = relational_image(Deductions)
+        msf_ = relational_image({(f_, m_) | m_ <- MSG_BODY, f_ <- unSq_(m_)})
+        xsf_ = relational_image({(f_, x_) | x_@@(_,fs_) <- Deductions,
+                                            f_ <- fs_})
+    within {(f_, msf_(f_), rid_(f_), xsf_(f_)) | f_ <- LearnableFact}
+
+  -- Rename events appropriately
+
+  BUILD_INTRUDER_0(INTRUDER_0) =
+    ((chase(INTRUDER_0)
+      [[ hear.m_ <- hear.m_, hear.m_ <- send.A_.Mallory.c_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- SYSTEM_M::DIRECT_MSG3, 
+         A_ <- diff(SenderType(l_),{Mallory}), c_ <- SessionIds ]] 
+      [[ hear.SentTo.(B_,c_,m_) <- hear.SentTo.(B_,c_,m_), hear.SentTo.(B_,c_,m_) <- send.A_.B_.c_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- SYSTEM_M::DIRECT_MSG3, 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- diff(ReceiverType(l_),{Mallory}), c_ <- SessionIds ]] 
+      [[ hear.SentByToC.(A_,B_,c_,m_) <- hear.SentByToC.(A_,B_,c_,m_), 
+         hear.SentByToC.(A_,B_,c_,m_) <- send.A_.B_.c_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- SessionIds ]] 
+      [[ hear.SentByTo.(A_,Mallory,c_,m_) <- hear.SentByTo.(A_,Mallory,c_,m_), 
+         hear.SentByTo.(A_,Mallory,c_,m_) <- send.A_.Mallory.c_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), 
+         A_ <- diff(SenderType(l_),{Mallory}), c_ <- SessionIds ]] 
+     [|{| hear |}|] STOP)
+      [[ say.m_ <- say.m_, say.m_ <- receive.A_.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- SYSTEM_M::DIRECT_MSG3, 
+         A_ <- SenderType(l_), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- {c_M} ]] 
+      [[ say.m_ <- say.m_, say.m_ <- receive.Mallory.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- {c_M} ]] 
+      [[ say.SentTo.(B_,c_,m_) <- say.SentTo.(B_,c_,m_), say.SentTo.(B_,c_,m_) <- receive.A_.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- SYSTEM_M::DIRECT_MSG3, 
+         A_ <- SenderType(l_), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- SessionIds ]] 
+      [[ say.SentByTo.(A_,Mallory,c_,m_) <- say.SentByTo.(A_,Mallory,c_,m_), 
+         say.SentByTo.(A_,Mallory,c_,m_) <- receive.A_.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), 
+         A_ <- diff(SenderType(l_), {Mallory}), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- SessionIds ]] 
+      [[ say.SentByToC.(A_,B_,c_,m_) <- say.SentByToC.(A_,B_,c_,m_), 
+         say.SentByToC.(A_,B_,c_,m_) <- receive.A_.B_.c_.(l_,m_,re_), 
+         say.SentByToC.(A_,B_,c_,m_) <- receive.Mallory.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), 
+         A_ <- diff(SenderType(l_), {Mallory}), 
+         B_ <- diff(ReceiverType(l_), {Mallory}), c_ <- SessionIds ]] 
+     [|{| say |}|] STOP)
+
+  -- Add in facts that are known initially
+
+  SAY_KNOWN_0(IK1) = 
+    (inter(IK1, ALL_SECRETS) != {} & dummy_leak -> SAY_KNOWN_0(IK1)) 
+    [] dummy_send -> SAY_KNOWN_0(IK1) 
+    [] dummy_receive -> SAY_KNOWN_0(IK1) 
+
+  SAY_KNOWN(IK1) =
+    SAY_KNOWN_0(IK1)
+      [[ dummy_leak <- leak.f_ | f_ <- inter(IK1, ALL_SECRETS) ]]
+      [[ dummy_send <- dummy_send, dummy_send <- send.A_.B_.c_.(l_,m_,se_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), components_(m_) <= IK1, 
+         A_ <- diff(SenderType(l_),{Mallory}), 
+         B_ <- ReceiverType(l_), c_ <- SessionIds ]] 
+      [[ dummy_receive <- dummy_receive, dummy_receive <- receive.A_.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- SYSTEM_M::DIRECT_MSG3, components_(m_) <= IK1, 
+         A_ <- SenderType(l_), 
+         B_ <- ReceiverType(l_), c_ <- {c_M} ]] 
+      [[ dummy_receive <- dummy_receive, dummy_receive <- receive.Mallory.B_.c_.(l_,m_,re_) | 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5,
+           SYSTEM_M::DIRECT_MSG6
+         }), components_(m_) <= IK1, 
+         B_ <- ReceiverType(l_), c_ <- {c_M} ]] 
+
+  STOP_SET = { dummy_send, dummy_receive }
+
+exports
+
+  -- Types of sender and receiver of each message
+
+  SenderType (Msg1) = User
+  SenderType (Msg2) = IdProvider
+  SenderType (Msg3) = User
+  SenderType (Msg4) = ServiceProvider
+  SenderType (Msg5) = IdProvider
+  SenderType (Msg6) = ServiceProvider
+
+  ReceiverType(Msg1) = IdProvider
+  ReceiverType(Msg2) = User
+  ReceiverType(Msg3) = ServiceProvider
+  ReceiverType(Msg4) = IdProvider
+  ReceiverType(Msg5) = ServiceProvider
+  ReceiverType(Msg6) = User
+
+  -- Intruder's initial knowledge
+
+  IK0 = {Alice, Dustin, Mallory, Sam, Am, Nm, Mm, Garbage}
+
+  Deductions = Deductions_
+
+  Base_Deductions = Base_Deductions_
+
+  Close_(IK_, ded_, fact_) =
+    CloseButNotFacts_(IK_, ded_, fact_, { })
+
+  -- The method below is used to calculate IK1 and Deductions and is important
+  -- when temporal checks are being done. If no check was done on f being
+  -- in Facts then the infer event corresponding to a intruder send event may be hidden.
+  CloseButNotFacts_(IK_, ded_, fact_, excludedFacts_) =
+    let IK1_ = 
+          union(IK_, {f_ | (f_,fs_) <- ded_, fs_ <= IK_ and not member(f_,excludedFacts_)})
+        ded1_ = 
+          {(f_,fs_) | (f_,fs_) <- ded_, not (member(f_,IK_)),
+                      fs_ <= fact_}
+        fact1_ = Union({IK_, {f_ | (f_,fs_) <- ded_}, Seeable_})
+    within
+    if card(IK_)==card(IK1_) and card(ded_)==card(ded1_)
+       and card(fact_)==card(fact1_)
+    then (IK_, {(f_,diff(fs_,IK_)) | (f_,fs_) <- ded_}, fact_)
+    else Close_(IK1_, ded1_, fact1_)
+
+KnowableFact = KnowableFact_ 
+  -- Put components together in parallel
+  INTRUDER_00(Deductions,LearnableFact) = 
+    (|| (f_,ms_,fss_,ds_) : f_ms_fss_ds_s(Deductions,LearnableFact) @ 
+         [AlphaL(f_,ms_,fss_,ds_)] IGNORANT(f_,ms_,fss_,ds_))
+
+  INTRUDER_0 = INTRUDER_00(Deductions, LearnableFact) \ {|infer|}
+
+  -- Set of all deductions that could occur
+  COMBINED_DEDUCTIONS =
+    let ds_ = INTRUDER_M::Deductions
+    within -- Don't you hate hacks like this (FDR does not allow empty channel types)?
+      if ds_ == {} then {(Garbage, {Garbage})} else ds_
+
+  -- Declare channels:
+  channel hear, say : MSG_BODY
+  channel dummy_leak, dummy_send, dummy_receive
+
+  -- Complete intruder
+
+  -- Intruder used for temporal specs
+  BUILD_INTRUDER'(INTRUDER_0,IK) =
+    (BUILD_INTRUDER_0(INTRUDER_0) ||| SAY_KNOWN(IK)) [| STOP_SET |] STOP
+
+  -- Intruder used for all other specs
+  BUILD_INTRUDER(INTRUDER_0) = BUILD_INTRUDER'(INTRUDER_0,IK1)
+
+endmodule
+
+-- FDR bug: cannot have a module prefix in a channel type
+Deductions' = INTRUDER_M::COMBINED_DEDUCTIONS
+channel infer : Deductions'
+
+IntruderInterface = 
+  Union({
+    {| receive.Mallory.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.A_.B_.c_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds, m_ <- Union({
+      SYSTEM_M::INPUT_MSG1,
+      SYSTEM_M::INPUT_MSG2,
+      SYSTEM_M::INPUT_MSG3,
+      SYSTEM_M::INPUT_MSG4,
+      SYSTEM_M::INPUT_MSG5,
+      SYSTEM_M::INPUT_MSG6
+    }) |},
+    {| send.A_.Mallory.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| send.A_.B_.c_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, c_ <- SessionIds, m_ <- Union({
+      SYSTEM_M::OUTPUT_MSG1,
+      SYSTEM_M::OUTPUT_MSG2,
+      SYSTEM_M::OUTPUT_MSG3,
+      SYSTEM_M::OUTPUT_MSG4,
+      SYSTEM_M::OUTPUT_MSG5,
+      SYSTEM_M::OUTPUT_MSG6
+    }) |}
+  })
+
+SYSTEM = 
+  SYSTEM_M::SYSTEM_0 [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER(INTRUDER_M::INTRUDER_0)
+
+-- ************************************************************************
+-- *                    Specifications and Assertions                     *
+-- ************************************************************************
+
+module SECRET_M
+
+  -- Specification for single secret
+
+  SECRET_SPEC_0(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ ->
+      (if member(Mallory, Bs_) then SECRET_SPEC_0(s_)
+       else SECRET_SPEC_1(s_))
+    []
+    leak.s_ -> SECRET_SPEC_0(s_)
+  SECRET_SPEC_1(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ -> SECRET_SPEC_1(s_)
+  -- Specification for all secrets
+
+  AlphaS(s_) = 
+    Union({
+      {|signal.Claim_Secret.A_.s_ | A_ <- ALL_PRINCIPALS|},
+      {leak.s_}
+    })
+  -- Sequential version; secs_ is secrets that intruder must not learn
+
+  SEQ_SECRET_SPEC_0(secs_) =
+    scs?s_!IntIn -> SEQ_SECRET_SPEC_0(secs_)
+    []
+    card(secs_)<4 & scs?s_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(union(secs_,{s_}))
+    []
+    card(secs_)==4 & scs?s_:secs_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(secs_)
+    []
+    leak?s_ : diff(ALL_SECRETS,secs_) -> SEQ_SECRET_SPEC_0(secs_)
+
+  isIntIn(S_) = if member(Mallory,S_) then IntIn else IntNotIn
+
+  Alpha_SECRETS =
+    Union({
+      {|leak, signal.Claim_Secret.A_ | A_ <- HONEST|}
+    })
+
+  Alpha_SEQ_SECRETS = 
+    Union({
+      {|leak, scs|}
+    })
+
+exports
+
+  SECRET_SPEC = (|| s_ : ALL_SECRETS @ [AlphaS(s_)] SECRET_SPEC_0(s_))
+
+  datatype IncInt = IntIn | IntNotIn
+
+  channel scs : ALL_SECRETS.IncInt
+
+  SEQ_SECRET_SPEC = SEQ_SECRET_SPEC_0({})
+
+  -- System for secrecy checking
+
+  SYSTEM_S = 
+    let ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+    SYSTEM
+      [[send.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <idp, a, nidp, m>))
+          <- signal.Claim_Secret.sp.ALGEBRA_M::applyRenaming(m).{u}, 
+        receive.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <m, idp>))
+          <- signal.Claim_Secret.u.ALGEBRA_M::applyRenaming(m).{sp} |
+            sp <- ServiceProvider_renamed_, u <- User_renamed_, 
+            idp <- IdProvider_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]] \ {| env, send, receive |}
+
+  SYSTEM_S_SEQ =
+    let ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+    SYSTEM
+      [[send.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <idp, a, nidp, m>))
+          <- scs.ALGEBRA_M::applyRenaming(m).isIntIn({sp, u}), 
+        receive.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <m, idp>))
+          <- scs.ALGEBRA_M::applyRenaming(m).isIntIn({u, sp}) |
+            sp <- ServiceProvider_renamed_, u <- User_renamed_, 
+            idp <- IdProvider_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]] \ {| env, send, receive |}
+
+endmodule
+
+-- Assertion of secrecy
+
+assert SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S
+assert SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ
+
+-- ************************************************************************
+-- *                 Authentication specification number 1                *
+-- ************************************************************************
+
+module AUTH1_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a_0(sp) =
+    signal.Running1.SERVICEPROVIDER_role.sp?idp?u?a ->
+    signal.Commit1.IDPROVIDER_role.idp.sp.u.a -> STOP
+
+  AlphaAuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a_0(sp) =
+    {|signal.Running1.SERVICEPROVIDER_role.sp.idp,
+      signal.Commit1.IDPROVIDER_role.idp.sp |
+         idp <- inter(IdProvider, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateSERVICEPROVIDERDustinToIDPROVIDERAgreement_u_a =
+    AuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a_0(Dustin)
+  |||
+  AuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a_0(Dustin)
+
+  -- alphabet of specification
+
+  alphaAuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a =
+    AlphaAuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a_0(Dustin)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a =
+    AuthenticateSERVICEPROVIDERDustinToIDPROVIDERAgreement_u_a
+
+  -- System for authentication checking
+
+  SYSTEM_1 =
+    let ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+    within
+      SYSTEM
+       [[send.sp.idp.c_.ALGEBRA_M::rmb((Msg4, Sq.<a, u, sp, idp>, <u, a>)) <-
+          signal.Running1.SERVICEPROVIDER_role.sp.idp.u.a,  
+        send.idp.sp.c_.ALGEBRA_M::rmb((Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>), <u, a, nidp>)) <-
+          signal.Commit1.IDPROVIDER_role.idp.sp.u.a |
+            sp <- ServiceProvider_renamed_, idp <- IdProvider_renamed_, 
+            u <- User_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a)
+
+endmodule
+
+assert AUTH1_M::AuthenticateSERVICEPROVIDERToIDPROVIDERAgreement_u_a [T= 
+       AUTH1_M::SYSTEM_1
+
+-- ************************************************************************
+-- *                 Authentication specification number 2                *
+-- ************************************************************************
+
+module AUTH2_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp_0(idp) =
+    signal.Running2.IDPROVIDER_role.idp?sp?u?a?nidp ->
+    signal.Commit2.SERVICEPROVIDER_role.sp.idp.u.a.nidp -> STOP
+
+  AlphaAuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp_0(idp) =
+    {|signal.Running2.IDPROVIDER_role.idp.sp,
+      signal.Commit2.SERVICEPROVIDER_role.sp.idp |
+         sp <- inter(ServiceProvider, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateIDPROVIDERSamToSERVICEPROVIDERAgreement_u_a_nidp =
+    AuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp_0(Sam)
+  |||
+  AuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp_0(Sam)
+
+  -- alphabet of specification
+
+  alphaAuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp =
+    AlphaAuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp_0(Sam)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp =
+    AuthenticateIDPROVIDERSamToSERVICEPROVIDERAgreement_u_a_nidp
+
+  -- System for authentication checking
+
+  SYSTEM_2 =
+    let IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+      SYSTEM
+       [[send.idp.sp.c_.ALGEBRA_M::rmb((Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>), <u, a, nidp>)) <-
+          signal.Running2.IDPROVIDER_role.idp.sp.u.a.nidp,  
+        send.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <idp, a, nidp, m>)) <-
+          signal.Commit2.SERVICEPROVIDER_role.sp.idp.u.a.nidp |
+            idp <- IdProvider_renamed_, sp <- ServiceProvider_renamed_, 
+            u <- User_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp)
+
+endmodule
+
+assert AUTH2_M::AuthenticateIDPROVIDERToSERVICEPROVIDERAgreement_u_a_nidp [T= 
+       AUTH2_M::SYSTEM_2
+
+-- ************************************************************************
+-- *                 Authentication specification number 3                *
+-- ************************************************************************
+
+module AUTH3_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateSERVICEPROVIDERToUSERAgreement_m_idp_0(sp) =
+    signal.Running3.SERVICEPROVIDER_role.sp?u?m?idp ->
+    signal.Commit3.USER_role.u.sp.m.idp -> STOP
+
+  AlphaAuthenticateSERVICEPROVIDERToUSERAgreement_m_idp_0(sp) =
+    {|signal.Running3.SERVICEPROVIDER_role.sp.u,
+      signal.Commit3.USER_role.u.sp |
+         u <- inter(User, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateSERVICEPROVIDERDustinToUSERAgreement_m_idp =
+    AuthenticateSERVICEPROVIDERToUSERAgreement_m_idp_0(Dustin)
+  |||
+  AuthenticateSERVICEPROVIDERToUSERAgreement_m_idp_0(Dustin)
+
+  -- alphabet of specification
+
+  alphaAuthenticateSERVICEPROVIDERToUSERAgreement_m_idp =
+    AlphaAuthenticateSERVICEPROVIDERToUSERAgreement_m_idp_0(Dustin)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateSERVICEPROVIDERToUSERAgreement_m_idp =
+    AuthenticateSERVICEPROVIDERDustinToUSERAgreement_m_idp
+
+  -- System for authentication checking
+
+  SYSTEM_3 =
+    let ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+      SYSTEM
+       [[send.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <idp, a, nidp, m>)) <-
+          signal.Running3.SERVICEPROVIDER_role.sp.u.m.idp,  
+        receive.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <m, idp>)) <-
+          signal.Commit3.USER_role.u.sp.m.idp |
+            sp <- ServiceProvider_renamed_, u <- User_renamed_, 
+            idp <- IdProvider_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateSERVICEPROVIDERToUSERAgreement_m_idp)
+
+endmodule
+
+assert AUTH3_M::AuthenticateSERVICEPROVIDERToUSERAgreement_m_idp [T= 
+       AUTH3_M::SYSTEM_3
+
+-- ************************************************************************
+-- *                 Authentication specification number 4                *
+-- ************************************************************************
+
+module AUTH4_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateUSERToSERVICEPROVIDERAgreement_idp_0(u) =
+    signal.Running4.USER_role.u?sp?idp ->
+    signal.Commit4.SERVICEPROVIDER_role.sp.u.idp -> STOP
+
+  AlphaAuthenticateUSERToSERVICEPROVIDERAgreement_idp_0(u) =
+    {|signal.Running4.USER_role.u.sp,
+      signal.Commit4.SERVICEPROVIDER_role.sp.u |
+         sp <- inter(ServiceProvider, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateUSERAliceToSERVICEPROVIDERAgreement_idp =
+    AuthenticateUSERToSERVICEPROVIDERAgreement_idp_0(Alice)
+  |||
+  AuthenticateUSERToSERVICEPROVIDERAgreement_idp_0(Alice)
+
+  -- alphabet of specification
+
+  alphaAuthenticateUSERToSERVICEPROVIDERAgreement_idp =
+    AlphaAuthenticateUSERToSERVICEPROVIDERAgreement_idp_0(Alice)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateUSERToSERVICEPROVIDERAgreement_idp =
+    AuthenticateUSERAliceToSERVICEPROVIDERAgreement_idp
+
+  -- System for authentication checking
+
+  SYSTEM_4 =
+    let User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+      SYSTEM
+       [[send.u.sp.c_.ALGEBRA_M::rmb((Msg3, Sq.<a, sp, idp, u>, <idp>)) <-
+          signal.Running4.USER_role.u.sp.idp,  
+        send.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <idp, a, nidp, m>)) <-
+          signal.Commit4.SERVICEPROVIDER_role.sp.u.idp |
+            u <- User_renamed_, sp <- ServiceProvider_renamed_, 
+            idp <- IdProvider_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateUSERToSERVICEPROVIDERAgreement_idp)
+
+endmodule
+
+assert AUTH4_M::AuthenticateUSERToSERVICEPROVIDERAgreement_idp [T= 
+       AUTH4_M::SYSTEM_4
+
+-- ************************************************************************
+-- *                 Authentication specification number 5                *
+-- ************************************************************************
+
+module AUTH5_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateIDPROVIDERToUSERAgreement_sp_0(idp) =
+    signal.Running5.IDPROVIDER_role.idp?u?sp ->
+    signal.Commit5.USER_role.u.idp.sp -> STOP
+
+  AlphaAuthenticateIDPROVIDERToUSERAgreement_sp_0(idp) =
+    {|signal.Running5.IDPROVIDER_role.idp.u,
+      signal.Commit5.USER_role.u.idp |
+         u <- inter(User, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateIDPROVIDERSamToUSERAgreement_sp =
+    AuthenticateIDPROVIDERToUSERAgreement_sp_0(Sam)
+  |||
+  AuthenticateIDPROVIDERToUSERAgreement_sp_0(Sam)
+
+  -- alphabet of specification
+
+  alphaAuthenticateIDPROVIDERToUSERAgreement_sp =
+    AlphaAuthenticateIDPROVIDERToUSERAgreement_sp_0(Sam)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateIDPROVIDERToUSERAgreement_sp =
+    AuthenticateIDPROVIDERSamToUSERAgreement_sp
+
+  -- System for authentication checking
+
+  SYSTEM_5 =
+    let IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+        Message_renamed_ = ALGEBRA_M::applyRenamingToSet(Message)
+    within
+      SYSTEM
+       [[send.idp.sp.c_.ALGEBRA_M::rmb((Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>), <u, a, nidp>)) <-
+          signal.Running5.IDPROVIDER_role.idp.u.sp,  
+        receive.sp.u.c_.ALGEBRA_M::rmb((Msg6, m, <m, idp>)) <-
+          signal.Commit5.USER_role.u.idp.sp |
+            idp <- IdProvider_renamed_, sp <- ServiceProvider_renamed_, 
+            u <- User_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, m <- Message_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateIDPROVIDERToUSERAgreement_sp)
+
+endmodule
+
+assert AUTH5_M::AuthenticateIDPROVIDERToUSERAgreement_sp [T= 
+       AUTH5_M::SYSTEM_5
+
+-- ************************************************************************
+-- *                 Authentication specification number 6                *
+-- ************************************************************************
+
+module AUTH6_M
+
+  -- Spec parameterized by name of agent being authenticated
+
+  AuthenticateUSERToIDPROVIDERAgreement_sp_0(u) =
+    signal.Running6.USER_role.u?idp?sp ->
+    signal.Commit6.IDPROVIDER_role.idp.u.sp -> STOP
+
+  AlphaAuthenticateUSERToIDPROVIDERAgreement_sp_0(u) =
+    {|signal.Running6.USER_role.u.idp,
+      signal.Commit6.IDPROVIDER_role.idp.u |
+         idp <- inter(IdProvider, HONEST)|}
+
+  -- Specs for particular agents being authenticated
+
+  AuthenticateUSERAliceToIDPROVIDERAgreement_sp =
+    AuthenticateUSERToIDPROVIDERAgreement_sp_0(Alice)
+  |||
+  AuthenticateUSERToIDPROVIDERAgreement_sp_0(Alice)
+
+  -- alphabet of specification
+
+  alphaAuthenticateUSERToIDPROVIDERAgreement_sp =
+    AlphaAuthenticateUSERToIDPROVIDERAgreement_sp_0(Alice)
+
+exports
+
+  -- Specs for all agents being authenticated
+
+  AuthenticateUSERToIDPROVIDERAgreement_sp =
+    AuthenticateUSERAliceToIDPROVIDERAgreement_sp
+
+  -- System for authentication checking
+
+  SYSTEM_6 =
+    let User_renamed_ = ALGEBRA_M::applyRenamingToSet(User)
+        ServiceProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(ServiceProvider)
+        IdProvider_renamed_ = ALGEBRA_M::applyRenamingToSet(IdProvider)
+        Artifact_renamed_ = ALGEBRA_M::applyRenamingToSet(Artifact)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+    within
+      SYSTEM
+       [[send.u.sp.c_.ALGEBRA_M::rmb((Msg3, Sq.<a, sp, idp, u>, <idp>)) <-
+          signal.Running6.USER_role.u.idp.sp,  
+        send.idp.sp.c_.ALGEBRA_M::rmb((Msg5, Encrypt.(SK__.(idp), <u, sp, idp, nidp>), <u, a, nidp>)) <-
+          signal.Commit6.IDPROVIDER_role.idp.u.sp |
+            u <- User_renamed_, sp <- ServiceProvider_renamed_, 
+            idp <- IdProvider_renamed_, a <- Artifact_renamed_, 
+            nidp <- Nonce_renamed_, c_ <- SessionIds
+      ]]
+      \ diff(Events, alphaAuthenticateUSERToIDPROVIDERAgreement_sp)
+
+endmodule
+
+assert AUTH6_M::AuthenticateUSERToIDPROVIDERAgreement_sp [T= 
+       AUTH6_M::SYSTEM_6
+

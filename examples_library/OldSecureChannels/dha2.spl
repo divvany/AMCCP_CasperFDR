@@ -1,0 +1,69 @@
+-- Diffe Hellman 2 Party Authentication Protocol
+
+#Free variables
+
+datatype F = G | Exp(F,Num) unwinding 2
+A, B    : Agent
+x, y : Num
+InverseKeys = (k,k), (Exp, Exp)
+gx, gy, k : F
+
+#Processes
+
+INITIATOR(A,x)
+RESPONDER(B,y)
+
+#Protocol description
+
+0.    -> A : B
+[A != B]
+1.  A -> B : Exp(G,x) % gx
+[isExp(gx) and A != B]
+<k := Exp(gx, y)>
+2.  B -> A : Exp(G,y) % gy
+[isExp(gy)]
+<k := Exp(gy, x)>
+3.  A -> B   : A 
+4.  B ->    : k
+
+#Equivalences
+forall x,y : Num . \
+  Exp(Exp(G,y), x) = Exp(Exp(G,x), y)
+
+#Channels
+
+authenticated
+-- secret
+-- direct
+
+#Specification
+-- PASS
+Secret(A, k, [B])
+-- PASS
+Secret(B, k, [A])
+
+-- PASS
+Agreement(B, A, [k])
+-- PASS
+Agreement(A, B, [k])
+
+#Functions
+
+inline isExp(y) = member(y, F__(1))  and y!=G
+inline isExp2(y) = member(y, F__(2)) and not member(y, F__(1))
+
+#Actual variables
+
+Alice, Bob, Mallory : Agent
+W, X, Y: Num
+
+#System
+
+INITIATOR(Alice, X)
+RESPONDER(Bob, Y)
+
+#Intruder Information
+
+Intruder = Mallory
+IntruderKnowledge = {Alice, Bob, Mallory, W}
+
