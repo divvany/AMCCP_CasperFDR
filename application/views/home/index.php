@@ -219,7 +219,7 @@
 
     function parseSyntax() {
 
-        var dicionary = ["#Free variables", "#Processes", "#Protocol description", "#Specification", "#Equivalences", "#Actual variables", "#Functions", "#System", "#Intruder Information"];
+        var dictionary = ["#Free variables", "#Processes", "#Protocol description", "#Specification", "#Equivalences", "#Actual variables", "#Functions", "#System", "#Intruder Information"];
 
 
         // will be completed
