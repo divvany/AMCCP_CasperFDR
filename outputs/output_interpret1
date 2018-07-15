@@ -8,11 +8,8 @@ __   __ __  __  ____   ___      _________________________________________
 Haskell 98 mode: Restart with command line option -98 to enable extensions
 
 Type :? for help
-Casper>   Stan withdraws from this run as SERVER_rol
-  Time passes
-  Time passes
-  Kab has been compromised
-  Bob believes he has completed a run of the protocol, taking role RESPONDER, with Alice, using data items 
+Casper>   A believes (s)he is running the protocol, taking role INITIATOR, with I, using data items Na, Nb
+  B believes (s)he has completed a run of the protocol, taking role RESPONDER, with A, using data items Na, Nb
 
 Goodbye
 

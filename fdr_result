@@ -1,11 +1,86 @@
 Using FDR Version 4.2.3 copyright 2016 Oxford University Innovation Ltd. All Rights Reserved.
-Loading ./documents/file.csp
-Checking:AUTH1_M::AuthenticateINITIATORToRESPONDERTimedAgreement2
+Loading ./documents/Normal/NS3.csp
+Checking:SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S
+Result:Failed, found 1 counterexamples
+Counterexample_type:trace with event leak.Nb
+behaviour_type:irrelevant
+    Trace:signal.Claim_Secret.A.Na.{I}*signal.Claim_Secret.A.Nb.{I}*signal.Claim_Secret.B.Nb.{A}*
+    End
+behaviour_type:performs event leak.Nb
+    Trace:signal.Claim_Secret.A.Na.{I}*signal.Claim_Secret.A.Nb.{I}*signal.Claim_Secret.B.Nb.{A}*
+    End
+behaviour_type:performs event leak.Nb
+        Trace:signal.Claim_Secret.A.Na.{I}*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*signal.Claim_Secret.A.Nb.{I}*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*signal.Claim_Secret.B.Nb.{A}*
+        End
+behaviour_type:performs event leak.Nb
+            Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*receive.A.B.(Msg3, Encrypt.(PK__.B, <Nb>), <Na, Nb>)*
+            End
+Checking:SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ
+Result:Failed, found 1 counterexamples
+Counterexample_type:trace with event leak.Nb
+behaviour_type:irrelevant
+    Trace:SECRET_M::scs.Na.SECRET_M::IntIn*SECRET_M::scs.Nb.SECRET_M::IntIn*SECRET_M::scs.Nb.SECRET_M::IntNotIn*
+    End
+behaviour_type:performs event leak.Nb
+    Trace:SECRET_M::scs.Na.SECRET_M::IntIn*SECRET_M::scs.Nb.SECRET_M::IntIn*SECRET_M::scs.Nb.SECRET_M::IntNotIn*
+    End
+behaviour_type:performs event leak.Nb
+        Trace:SECRET_M::scs.Na.SECRET_M::IntIn*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*SECRET_M::scs.Nb.SECRET_M::IntIn*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*SECRET_M::scs.Nb.SECRET_M::IntNotIn*
+        End
+behaviour_type:performs event leak.Nb
+            Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*receive.A.B.(Msg3, Encrypt.(PK__.B, <Nb>), <Na, Nb>)*
+            End
+Checking:AUTH1_M::AuthenticateINITIATORToRESPONDERAliveness
     [T= AUTH1_M::SYSTEM_1
 Result:Passed, found 0 counterexamples
-Checking:AUTH2_M::AuthenticateINITIATORToRESPONDERAgreement
+Checking:AUTH2_M::AuthenticateINITIATORToRESPONDERWeakAgreement
     [T= AUTH2_M::SYSTEM_2
-Result:Passed, found 0 counterexamples
-Checking:AUTH3_M::AuthenticateRESPONDERToINITIATORAgreement
+Result:Failed, found 1 counterexamples
+Counterexample_type:trace with event signal.Commit2.RESPONDER_role.B.A
+behaviour_type:irrelevant
+    Trace:
+    End
+behaviour_type:performs event signal.Commit2.RESPONDER_role.B.A
+    Trace:
+    End
+behaviour_type:performs event signal.Commit2.RESPONDER_role.B.A
+        Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*signal.Running2.INITIATOR_role.A.I*
+        End
+behaviour_type:performs event receive.A.B.(Msg3, Encrypt.(PK__.B, <Nb>), <Na, Nb>)
+            Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*
+            End
+Checking:AUTH3_M::AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_na_nb
     [T= AUTH3_M::SYSTEM_3
+Result:Failed, found 1 counterexamples
+Counterexample_type:trace with event signal.Commit3.RESPONDER_role.B.A.Na.Nb
+behaviour_type:irrelevant
+    Trace:
+    End
+behaviour_type:performs event signal.Commit3.RESPONDER_role.B.A.Na.Nb
+    Trace:
+    End
+behaviour_type:performs event signal.Commit3.RESPONDER_role.B.A.Na.Nb
+        Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*signal.Running3.INITIATOR_role.A.I.Na.Nb*
+        End
+behaviour_type:performs event receive.A.B.(Msg3, Encrypt.(PK__.B, <Nb>), <Na, Nb>)
+            Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*
+            End
+Checking:AUTH4_M::AuthenticateINITIATORToRESPONDERAgreement_na_nb
+    [T= AUTH4_M::SYSTEM_4
+Result:Failed, found 1 counterexamples
+Counterexample_type:trace with event signal.Commit4.RESPONDER_role.B.A.Na.Nb
+behaviour_type:irrelevant
+    Trace:
+    End
+behaviour_type:performs event signal.Commit4.RESPONDER_role.B.A.Na.Nb
+    Trace:
+    End
+behaviour_type:performs event signal.Commit4.RESPONDER_role.B.A.Na.Nb
+        Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*signal.Running4.INITIATOR_role.A.I.Na.Nb*
+        End
+behaviour_type:performs event receive.A.B.(Msg3, Encrypt.(PK__.B, <Nb>), <Na, Nb>)
+            Trace:env.A.(Env0, I, <Na, I>)*send.A.I.(Msg1, Encrypt.(PK__.I, <Na, A>), <>)*receive.A.B.(Msg1, Encrypt.(PK__.B, <Na, A>), <>)*send.B.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Na, Nb>)*receive.I.A.(Msg2, Encrypt.(PK__.A, <Na, Nb>), <Nb>)*send.A.I.(Msg3, Encrypt.(PK__.I, <Nb>), <Na, Nb>)*
+            End
+Checking:AUTH5_M::AuthenticateRESPONDERToINITIATORAgreement_na_nb
+    [T= AUTH5_M::SYSTEM_5
 Result:Passed, found 0 counterexamples

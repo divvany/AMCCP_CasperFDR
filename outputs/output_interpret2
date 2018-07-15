@@ -8,15 +8,12 @@ __   __ __  __  ____   ___      _________________________________________
 Haskell 98 mode: Restart with command line option -98 to enable extensions
 
 Type :? for help
-Casper> 1. I_Alice ->  Stan   : Alice, Bob, Ni
-2.  Stan   -> I_Alice : {Ni, Bob, Kab}{SKey(Alice)}
-3.  Stan   ->  I_Bob  : {Kab, Alice}{SKey(Bob)}
-  Stan withdraws from this run as SERVER_rol
-  Time passes
-3. I_Stan  ->   Bob   : {Kab, Alice}{SKey(Bob)}
-4.   Bob   -> I_Alice : {Nb}{Kab}
-  Time passes
-  Kab has been compromised
+Casper> 0.     ->  A  : I
+1.  A  -> I_I : {Na, A}{PK(I)}
+1. I_A ->  B  : {Na, A}{PK(B)}
+2.  B  -> I_A : {Na, Nb}{PK(A)}
+2. I_I ->  A  : {Na, Nb}{PK(A)}
+3.  A  -> I_I : {Nb}{PK(I)}
 
 Goodbye
 

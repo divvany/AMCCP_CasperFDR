@@ -1,57 +1,71 @@
 -- CSP script produced using Casper version 2.0
 
--- -- 6.2.3. ISO Two-Pass Mutual Authentication with CCF's
+-- -- Needham Schroeder Shared Key Protocol, with key compromise
 -- 
 -- #Free variables
 -- 
--- A,B : Agent
--- ta,tb : TimeStamp
--- f : HashFunction
--- Shared : Agent x Agent -> SharedKey
--- InverseKeys = (Shared,Shared)
+-- A, B   : Agent
+-- S      : Server
+-- na, nb : Nonce
+-- SKey   : Agent -> ServerKey
+-- kab   : SessionKey
+-- 
+-- InverseKeys = (SKey,SKey), (kab,kab)
 -- 
 -- #Processes
 -- 
--- INITIATOR(A) knows Shared(A,B)
--- RESPONDER(B) knows Shared(A,B) 
+-- INITIATOR(A,S,na) knows SKey(A) 
+-- RESPONDER(B,nb) knows SKey(B) 
+-- SERVER(S,kab) knows SKey
 -- 
 -- #Protocol description
 -- 
--- 0.    -> A : B
+-- 0.   -> A : B
 -- [A != B]
--- 1.  A -> B : ta,f(Shared(A,B),ta,B)
--- [ta==now or ta+1==now]
--- 2.  B -> A : tb,f(Shared(A,B),tb,A)
--- [tb==now or tb+1==now]
+-- 1. A -> S : A, B, na
+-- 2. S -> A : {na, B, kab}{SKey(A)} 
+-- 3. S -> B : {kab,A}{SKey(B)}
+-- [A != B]
+-- 4. B -> A : {nb}{kab}
+-- [A != B]
+-- 5. A -> B : {nb,nb}{kab}
 -- 
 -- #Specification
 -- 
 -- -- PASS
--- TimedAgreement(A,B,2,[])
--- -- PASS
--- Agreement(A,B,[])
--- -- PASS
--- Agreement(B,A,[])
+-- Agreement(B, A, [])
+-- -- FAIL
+-- Agreement(A, B, [])
+-- -- FAIL
+-- Secret(A, kab, [B])
+-- -- FAIL
+-- Secret(B, kab, [A])
 -- 
 -- #Actual variables
 -- 
--- Alice, Bob, Mallory : Agent
--- TimeStamp = 0 .. 2
--- MaxRunTime = 1
+-- Alice, Bob, Ivor  : Agent
+-- Stan              : Server
+-- Na, Nb, Ni        : Nonce
+-- Kab               : SessionKey
 -- 
--- #Functions
+-- InverseKeys = (Kab,Kab)
 -- 
--- symbolic Shared
+-- #Inline functions
 -- 
--- #System
+-- symbolic SKey
 -- 
--- INITIATOR(Alice)
--- RESPONDER(Bob)
+-- #System 
+-- 
+-- INITIATOR(Alice, Stan, Na)
+-- RESPONDER(Bob, Nb)
+-- SERVER(Stan,Kab)
+-- -- WithdrawOption = True
 -- 
 -- #Intruder Information
 -- 
--- Intruder = Mallory
--- IntruderKnowledge = {Alice,Bob,Mallory,Shared(Alice,Mallory),Shared(Mallory,Alice),Shared(Bob,Mallory),Shared(Mallory,Bob)}
+-- Intruder = Ivor
+-- IntruderKnowledge = {Alice, Bob, Ivor, Stan, Ni, SKey(Ivor)}
+-- Crackable = SessionKey
 
 -- ************************************************************************
 -- *                                Types                                 *
@@ -60,33 +74,22 @@
 -- Main datatype, representing all possible messages
 
 datatype Encryption =
-  Alice | Bob | Mallory | Garbage | Shared__.(Agent, Agent) | f | 
-  Timestamp.TS | Sq.Seq(Encryption) | Encrypt.(ALL_KEYS,Seq(Encryption)) | 
+  Alice | Bob | Ivor | Stan | Na | Nb | Ni | Kab | Garbage | SKey__.Agent | 
+  Sq.Seq(Encryption) | Encrypt.(ALL_KEYS,Seq(Encryption)) | 
   Hash.(HashFunction, Seq(Encryption)) | Xor.(Encryption, Encryption)
 
 -- All keys and hashfunctions in the system
 
 ALL_KEYS :: {Encryption}
-ALL_KEYS = {}
+ALL_KEYS = Union({SessionKey, ServerKey})
 
 ASYMMETRIC_KEYS = {k_, inverse(k_) | k_ <- ALL_KEYS, k_!=inverse(k_)}
 HashFunction :: {Encryption}
-HashFunction = {f}
+HashFunction = {}
 
 -- All atoms in the system
 
-ATOM = {Alice, Bob, Mallory, Garbage}
-
--- Information about timestamps
-
-now = 0
-MinTime = -2
-MaxTime = -0
-TS = {MinTime .. MaxTime}
-MaxRunTime = 1
-TimeStamp = {Timestamp.t_ | t_ <- TS}
-max(t0_,t1_) = if t0_>t1_ then t0_ else t1_
-min(t0_,t1_) = if t0_>t1_ then t1_ else t0_
+ATOM = {Alice, Bob, Ivor, Stan, Na, Nb, Ni, Kab, Garbage}
 
 -- Some standard functions
 
@@ -102,18 +105,6 @@ decryptable(Encrypt.(k1_,m_),k_) = k_ == inverse(k1_)
 decryptable(_,_) = false
 nth(ms_,n_) = if n_ == 1 then head(ms_) else nth(tail(ms_), n_ - 1)
 
-map(f_, <>) = <>
-map(f_, <x_>^xs_) = <f_(x_)>^map(f_,xs_)
-
--- Decrement all timestamps by 1
-dects(t_) = if t_ > MinTime then t_-1 else t_
-updt(Timestamp.t_) = Timestamp.dects(t_)
-updt(Sq.es_) = Sq.map(updt,es_)
-updt(Encrypt.(k_,es_)) = Encrypt.(k_, map(updt,es_))
-updt(Hash.(f_,es_)) = Hash.(f_,map(updt,es_))
-updt(Xor.(e1_,e2_)) = Xor.(updt(e1_),updt(e2_))
-updt(x_) = x_
-
 -- add Garbage to a set that contains and encryption,
 -- hash function application of Vernam encryption
 
@@ -125,17 +116,20 @@ addGarbage_(S_) =
 
 -- Definitions of user supplied functions
 
-Shared(arg_1_, arg_2_) = Shared__.(arg_1_, arg_2_)
+SKey(arg_1_) = SKey__.(arg_1_)
 
 -- Inverses of functions
 
-inverse(Shared__.arg_) = Shared__.arg_
+inverse(Kab) = Kab
+inverse(SKey__.arg_) = SKey__.arg_
 
 -- Types in system
 
-Agent = {Alice, Bob, Mallory}
-SharedKey = 
-  {Shared(arg_1_, arg_2_) | arg_1_ <- Agent, arg_2_ <- Agent}
+Agent = {Alice, Bob, Ivor}
+Server = {Stan}
+Nonce = {Na, Nb, Ni}
+SessionKey = {Kab}
+ServerKey = {SKey(arg_1_) | arg_1_ <- Agent}
 
 
 -- ************************************************************************
@@ -145,15 +139,15 @@ SharedKey =
 -- Message labels
 
 datatype Labels =
-  Msg1 | Msg2 | Env0
+  Msg1 | Msg2 | Msg3 | Msg4 | Msg5 | Env0
 
 MSG_BODY = {ALGEBRA_M::applyRenaming(m_) | (_,m_,_,_) <- SYSTEM_M::INT_MSG_INFO}
 
 -- Type of principals
 
-ALL_PRINCIPALS = Agent
+ALL_PRINCIPALS = Union({Agent, Server})
 
-INTRUDER = Mallory
+INTRUDER = Ivor
 
 HONEST = diff(ALL_PRINCIPALS, {INTRUDER})
 
@@ -174,13 +168,13 @@ channel start, close : HONEST.HONEST_ROLE
 channel leak : addGarbage_(ALL_SECRETS)
 -- Roles of agents
 
-datatype ROLE = INITIATOR_role | RESPONDER_role
+datatype ROLE = INITIATOR_role | RESPONDER_role | SERVER_role
 
 HONEST_ROLE = ROLE
 
 -- Secrets in the protocol
 
-ALL_SECRETS_0 = {}
+ALL_SECRETS_0 = SessionKey
 ALL_SECRETS = addGarbage_(ALGEBRA_M::applyRenamingToSet(ALL_SECRETS_0))
 
 -- Define type of signals, and declare signal channel
@@ -192,40 +186,26 @@ datatype Signal =
   RunCom1.ALL_PRINCIPALS.ALL_PRINCIPALS |
   Running2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
   Commit2.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
-  RunCom2.ALL_PRINCIPALS.ALL_PRINCIPALS |
-  Running3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
-  Commit3.HONEST_ROLE.ALL_PRINCIPALS.ALL_PRINCIPALS |
-  RunCom3.ALL_PRINCIPALS.ALL_PRINCIPALS
+  RunCom2.ALL_PRINCIPALS.ALL_PRINCIPALS
 
 channel signal : Signal
-
--- Timing functions
-
-channel tock
-
-TOCKS(n_) = n_>0 & tock -> TOCKS(n_ - 1) [] SKIP
-TSKIP = tock -> TSKIP [] SKIP
-allowInitTocks(P_) = tock -> allowInitTocks(P_) [] P_
-TIMEOUT = tock -> TSKIP
-transparent explicate
-addTime(P_,n_) = explicate(allowInitTocks((P_ ||| TOCKS(n_)) /\ TIMEOUT))
 
 Fact_1 = 
   Union({
     {Garbage},
     Agent,
-    TimeStamp,
-    SharedKey,
-    {Hash.(f, <Shared__.(A, B), Timestamp.ta, B>) |
-       A <- Agent, B <- Agent, ta <- TS},
-    {Sq.<Shared__.(A, B), Timestamp.ta, B> |
-       A <- Agent, B <- Agent, ta <- TS},
-    {Sq.<A, B> |
-       A <- Agent, B <- Agent},
-    {Hash.(f, <Shared__.(A, B), Timestamp.tb, A>) |
-       A <- Agent, B <- Agent, tb <- TS},
-    {Sq.<Shared__.(A, B), Timestamp.tb, A> |
-       A <- Agent, B <- Agent, tb <- TS}
+    Server,
+    Nonce,
+    SessionKey,
+    ServerKey,
+    {Encrypt.(SKey__.(A), <na, B, kab>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, na <- Nonce},
+    {Encrypt.(SKey__.(B), <kab, A>) |
+       A <- Agent, B <- Agent, kab <- SessionKey},
+    {Encrypt.(kab, <nb>) |
+       kab <- SessionKey, nb <- Nonce},
+    {Encrypt.(kab, <nb, nb>) |
+       kab <- SessionKey, nb <- Nonce}
   })
 
 external relational_inverse_image
@@ -248,66 +228,92 @@ module SYSTEM_M
 
   INPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
   INPUT_INT_MSG = 
-    Union({INPUT_INT_MSG1, INPUT_INT_MSG2})
+    
+    Union({
+      INPUT_INT_MSG1,
+      INPUT_INT_MSG2,
+      INPUT_INT_MSG3,
+      INPUT_INT_MSG4,
+      INPUT_INT_MSG5
+    })
 
   OUTPUT_INT_MSG :: {(Labels, Encryption, <Encryption>)}
   OUTPUT_INT_MSG = 
-    Union({OUTPUT_INT_MSG1, OUTPUT_INT_MSG2})
+    
+    Union({
+      OUTPUT_INT_MSG1,
+      OUTPUT_INT_MSG2,
+      OUTPUT_INT_MSG3,
+      OUTPUT_INT_MSG4,
+      OUTPUT_INT_MSG5
+    })
 
   -- INITIATOR
 
-  INITIATOR_0(runTimeRemaining_, A) =
-      INITIATOR_0'(runTimeRemaining_, A)
-
-  INITIATOR_0'(runTimeRemaining_, A) = 
-    tock -> INITIATOR_0'(runTimeRemaining_, updt(A))
-    [] 
+  INITIATOR_0(A, S, na) =
     [] B : Agent @ A != B & env_I.A.(Env0, B,<>) ->
-    [] ta : TS @ 
-      output.A.B.(Msg1, Sq.<Timestamp.ta, Hash.(f, <Shared__.(A, B), Timestamp.ta, B>)>,<>) ->
-      INITIATOR_0''(runTimeRemaining_, A, B, ta)
+    output.A.S.(Msg1, Sq.<A, B, na>,<>) ->
+    [] kab : SessionKey @ 
+      input.S.A.(Msg2, Encrypt.(SKey__.(A), <na, B, kab>),<>) ->
+    [] nb : Nonce @ A != B & 
+      input.B.A.(Msg4, Encrypt.(inverse(kab), <nb>),<>) ->
+    output.A.B.(Msg5, Encrypt.(kab, <nb, nb>),<kab>) ->
+    close.A.INITIATOR_role -> SKIP
 
-  INITIATOR_0''(runTimeRemaining_, A, B, ta) = 
-    tock -> (if runTimeRemaining_ < 0 then SKIP
-      else INITIATOR_0''(runTimeRemaining_-1, updt(A), updt(B), dects(ta)))
-    [] 
-    [] tb : TS @ tb==now or tb+1==now & 
-      input.B.A.(Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>,<>) ->
-    SKIP
+  INITIATOR_1(A, S, na) = INITIATOR_0(A, S, na)
 
-  INITIATOR_1(runTimeRemaining_, A) = INITIATOR_0(runTimeRemaining_, A)
-
-  INITIATOR(runTimeRemaining_, A) =
-    INITIATOR_1(runTimeRemaining_, A)
+  INITIATOR(A, S, na) =
+    INITIATOR_1(A, S, na)
+      [[input.S.A.(l_,m_,re_) <- receive.S.A.ALGEBRA_M::rmb((l_,m_,re_)) |
+          S <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
       [[input.B.A.(l_,m_,re_) <- receive.B.A.ALGEBRA_M::rmb((l_,m_,re_)) |
-          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO4]]
+      [[output.A.S.(l_,m_,se_) <- send.A.S.ALGEBRA_M::rmb((l_,m_,se_)) |
+          S <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
       [[output.A.B.(l_,m_,se_) <- send.A.B.ALGEBRA_M::rmb((l_,m_,se_)) |
-          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO5]]
       [[env_I.A.m_ <- env.A.ALGEBRA_M::rmb(m_) |
           m_ <- ENV_INT_MSG0]]
 
   -- RESPONDER
 
-  RESPONDER_0(runTimeRemaining_, B) =
-      RESPONDER_0'(runTimeRemaining_, B)
+  RESPONDER_0(B, nb) =
+    [] A : Agent @ [] S : Server @ [] kab : SessionKey @ A != B & 
+      input.S.B.(Msg3, Encrypt.(SKey__.(B), <kab, A>),<>) ->
+    output.B.A.(Msg4, Encrypt.(kab, <nb>),<>) ->
+    input.A.B.(Msg5, Encrypt.(inverse(kab), <nb, nb>),<kab>) ->
+    close.B.RESPONDER_role -> SKIP
 
-  RESPONDER_0'(runTimeRemaining_, B) = 
-    tock -> RESPONDER_0'(runTimeRemaining_, updt(B))
-    [] 
-    [] A : Agent @ [] ta : TS @ ta==now or ta+1==now & 
-      input.A.B.(Msg1, Sq.<Timestamp.ta, Hash.(f, <Shared__.(A, B), Timestamp.ta, B>)>,<>) ->
-    [] tb : TS @ 
-      output.B.A.(Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>,<>) ->
-    SKIP
+  RESPONDER_1(B, nb) = RESPONDER_0(B, nb)
 
-  RESPONDER_1(runTimeRemaining_, B) = RESPONDER_0(runTimeRemaining_, B)
-
-  RESPONDER(runTimeRemaining_, B) =
-    RESPONDER_1(runTimeRemaining_, B)
+  RESPONDER(B, nb) =
+    RESPONDER_1(B, nb)
+      [[input.S.B.(l_,m_,re_) <- receive.S.B.ALGEBRA_M::rmb((l_,m_,re_)) |
+          S <- Server, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
       [[input.A.B.(l_,m_,re_) <- receive.A.B.ALGEBRA_M::rmb((l_,m_,re_)) |
-          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO5]]
       [[output.B.A.(l_,m_,se_) <- send.B.A.ALGEBRA_M::rmb((l_,m_,se_)) |
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO4]]
+
+  -- SERVER
+
+  SERVER_0(S, kab) =
+    [] A : Agent @ [] B : Agent @ [] na : Nonce @ 
+      input.A.S.(Msg1, Sq.<A, B, na>,<>) ->
+    output.S.A.(Msg2, Encrypt.(SKey__.(A), <na, B, kab>),<>) ->
+    output.S.B.(Msg3, Encrypt.(SKey__.(B), <kab, A>),<>) ->
+    close.S.SERVER_role -> SKIP
+
+  SERVER_1(S, kab) = SERVER_0(S, kab)
+
+  SERVER(S, kab) =
+    SERVER_1(S, kab)
+      [[input.A.S.(l_,m_,re_) <- receive.A.S.ALGEBRA_M::rmb((l_,m_,re_)) |
+          A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO1]]
+      [[output.S.A.(l_,m_,se_) <- send.S.A.ALGEBRA_M::rmb((l_,m_,se_)) |
           A <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO2]]
+      [[output.S.B.(l_,m_,se_) <- send.S.B.ALGEBRA_M::rmb((l_,m_,se_)) |
+          B <- Agent, (l_,m_,se_,re_) <- INT_MSG_INFO3]]
 
   -- Process representing Alice
 
@@ -315,18 +321,21 @@ module SYSTEM_M
     Union({
       {|env.Alice.m_ | m_ <- ENV_MSG0|},
       {|send.Alice.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG1|},
+      {|send.Alice.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG5|},
       {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2|},
-      {tock}
+      {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG4|},
+      {|close.Alice.INITIATOR_role|}
     })
 
-  INITIATOR_Alice = (INITIATOR(MaxRunTime, Alice) ; RUN({tock}))
+  INITIATOR_Alice = (INITIATOR(Alice, Stan, Na) ; STOP)
 
   Alpha_Alice = 
     Union({
       {|env.Alice|},
       {|send.Alice.A_ | A_ <- ALL_PRINCIPALS|},
       {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG2|},
-      {tock}
+      {|receive.A_.Alice.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG4|},
+      {|close.Alice|}
     })
 
   AGENT_Alice =
@@ -336,23 +345,48 @@ module SYSTEM_M
 
   Alpha_RESPONDER_Bob = 
     Union({
-      {|send.Bob.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG2|},
-      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
-      {tock}
+      {|send.Bob.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG4|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5|},
+      {|close.Bob.RESPONDER_role|}
     })
 
-  RESPONDER_Bob = (RESPONDER(MaxRunTime, Bob) ; RUN({tock}))
+  RESPONDER_Bob = (RESPONDER(Bob, Nb) ; STOP)
 
   Alpha_Bob = 
     Union({
       {|env.Bob|},
       {|send.Bob.A_ | A_ <- ALL_PRINCIPALS|},
-      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
-      {tock}
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG3|},
+      {|receive.A_.Bob.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG5|},
+      {|close.Bob|}
     })
 
   AGENT_Bob =
     (RESPONDER_Bob [Alpha_RESPONDER_Bob || {} ] STOP)
+
+  -- Process representing Stan
+
+  Alpha_SERVER_Stan = 
+    Union({
+      {|send.Stan.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG2|},
+      {|send.Stan.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- OUTPUT_MSG3|},
+      {|receive.A_.Stan.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|close.Stan.SERVER_role|}
+    })
+
+  SERVER_Stan = (SERVER(Stan, Kab) ; STOP)
+
+  Alpha_Stan = 
+    Union({
+      {|env.Stan|},
+      {|send.Stan.A_ | A_ <- ALL_PRINCIPALS|},
+      {|receive.A_.Stan.m_ | A_ <- ALL_PRINCIPALS, m_ <- INPUT_MSG1|},
+      {|close.Stan|}
+    })
+
+  AGENT_Stan =
+    (SERVER_Stan [Alpha_SERVER_Stan || {} ] STOP)
 
 exports
 
@@ -361,12 +395,21 @@ exports
 
   INPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG1}
   INPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG2}
+  INPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG3}
+  INPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG4}
+  INPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- INPUT_INT_MSG5}
 
   OUTPUT_MSG1 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG1}
   OUTPUT_MSG2 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG2}
+  OUTPUT_MSG3 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG3}
+  OUTPUT_MSG4 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG4}
+  OUTPUT_MSG5 = {ALGEBRA_M::rmb(m_) | m_ <- OUTPUT_INT_MSG5}
 
   DIRECT_MSG1 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO1}
   DIRECT_MSG2 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO2}
+  DIRECT_MSG3 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO3}
+  DIRECT_MSG4 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO4}
+  DIRECT_MSG5 = {ALGEBRA_M::rmb4(m_) | m_ <- INT_MSG_INFO5}
 
   -- Environmental messages
 
@@ -384,25 +427,68 @@ exports
   -- extras fields for both agents
 
   INT_MSG_INFO1 = 
-    {(Msg1, Sq.<Timestamp.ta, Hash.(f, <Shared__.(A, B), Timestamp.ta, B>)>, <>, <>) |
-       A <- Agent, B <- Agent, ta <- TS}
+    {(Msg1, Sq.<A, B, na>, <>, <>) |
+       A <- Agent, B <- Agent, na <- Nonce}
   INT_MSG_INFO2 = 
-    {(Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>, <>, <>) |
-       A <- Agent, B <- Agent, tb <- TS}
+    {(Msg2, Encrypt.(SKey__.(A), <na, B, kab>), <>, <>) |
+       A <- Agent, B <- Agent, kab <- SessionKey, na <- Nonce}
+  INT_MSG_INFO3 = 
+    {(Msg3, Encrypt.(SKey__.(B), <kab, A>), <>, <>) |
+       A <- Agent, B <- Agent, kab <- SessionKey}
+  INT_MSG_INFO4 = 
+    {(Msg4, Encrypt.(kab, <nb>), <>, <>) |
+       kab <- SessionKey, nb <- Nonce}
+  INT_MSG_INFO5 = 
+    {(Msg5, Encrypt.(kab, <nb, nb>), <kab>, <kab>) |
+       kab <- SessionKey, nb <- Nonce}
 
   ENV_MSG = {ALGEBRA_M::rmb(m_) | m_ <- ENV_INT_MSG}
 
   INT_MSG_INFO :: {(Labels, Encryption, <Encryption>, <Encryption>)}
-  INT_MSG_INFO = Union({INT_MSG_INFO1, INT_MSG_INFO2})
+  INT_MSG_INFO = 
+    Union({
+      INT_MSG_INFO1,
+      INT_MSG_INFO2,
+      INT_MSG_INFO3,
+      INT_MSG_INFO4,
+      INT_MSG_INFO5
+    })
   INPUT_INT_MSG1 = { input_proj(mt_) | mt_ <- INT_MSG_INFO1 }
   INPUT_INT_MSG2 = { input_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  INPUT_INT_MSG3 = { input_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  INPUT_INT_MSG4 = { input_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  INPUT_INT_MSG5 = { input_proj(mt_) | mt_ <- INT_MSG_INFO5 }
 
-  INPUT_MSG = Union({INPUT_MSG1, INPUT_MSG2})
+  INPUT_MSG = 
+    Union({
+      INPUT_MSG1,
+      INPUT_MSG2,
+      INPUT_MSG3,
+      INPUT_MSG4,
+      INPUT_MSG5
+    })
   OUTPUT_INT_MSG1 = { output_proj(mt_) | mt_ <- INT_MSG_INFO1 }
   OUTPUT_INT_MSG2 = { output_proj(mt_) | mt_ <- INT_MSG_INFO2 }
+  OUTPUT_INT_MSG3 = { output_proj(mt_) | mt_ <- INT_MSG_INFO3 }
+  OUTPUT_INT_MSG4 = { output_proj(mt_) | mt_ <- INT_MSG_INFO4 }
+  OUTPUT_INT_MSG5 = { output_proj(mt_) | mt_ <- INT_MSG_INFO5 }
 
-  OUTPUT_MSG = Union({OUTPUT_MSG1, OUTPUT_MSG2})
-  DIRECT_MSG = Union({DIRECT_MSG1, DIRECT_MSG2})
+  OUTPUT_MSG = 
+    Union({
+      OUTPUT_MSG1,
+      OUTPUT_MSG2,
+      OUTPUT_MSG3,
+      OUTPUT_MSG4,
+      OUTPUT_MSG5
+    })
+  DIRECT_MSG = 
+  Union({
+    DIRECT_MSG1,
+    DIRECT_MSG2,
+    DIRECT_MSG3,
+    DIRECT_MSG4,
+    DIRECT_MSG5
+  })
 
   channel input:ALL_PRINCIPALS.ALL_PRINCIPALS.INPUT_INT_MSG
   channel output: ALL_PRINCIPALS.ALL_PRINCIPALS.OUTPUT_INT_MSG
@@ -412,8 +498,10 @@ exports
 
   SYSTEM_0 =
     (AGENT_Alice
-      [Alpha_Alice||Alpha_Bob]
-    AGENT_Bob)
+      [Alpha_Alice||union(Alpha_Bob, Alpha_Stan)]
+    (AGENT_Bob
+      [Alpha_Bob||Alpha_Stan]
+    AGENT_Stan))
 
 endmodule
 
@@ -472,6 +560,198 @@ exports
     {(applyRenaming0(f_), applyRenamingToSet(X_)) | (f_,X_) <- S_}
 
 endmodule
+
+-- ************************************************************************
+-- *                            Key compromise                            *
+-- ************************************************************************
+
+module CRACKING_M
+
+  roles(Alice) = {INITIATOR_role}
+  roles(Bob) = {RESPONDER_role}
+  roles(Stan) = {SERVER_role}
+  roles(_) = {}
+
+  -- Untimed key manager for type SessionKey
+
+  -- **********************************************************************
+  -- *               Key compromise manager for SessionKey                *
+  -- **********************************************************************
+
+  module SessionKeyCRACKING_M
+
+    -- SessionKeyMonitor(n_,as_) monitors the foreground nonce n. Its state
+    -- is a set of (agent,role) pairs, reflecting which agents currently
+    -- store n.close.A.R event reflects the termination (or withdrawal) of
+    -- agent A as role R, and therefore A (as R) forgets all foreground
+    -- values stored (including n). SessionKeyMonitor(n_,as_) updates
+    -- accordingly; if no agents still hold n, then it synchronizes on
+    -- manSync1_SessionKey with SessionKeyCracker and/or
+    -- SessionKeyRecycler.
+
+    SessionKeyMonitor(n_,as_) =
+      Stan_int_Pick2_SessionKey.n_ ->
+           SessionKeyMonitor(n_,union(as_,{(Stan,SERVER_role)}))
+      [] Alice_int_Told2_SessionKey.n_ ->
+           SessionKeyMonitor(n_,union(as_,{(Alice,INITIATOR_role)}))
+      [] Bob_int_Told3_SessionKey.n_ ->
+           SessionKeyMonitor(n_,union(as_,{(Bob,RESPONDER_role)}))
+      [] close?a_?t_:roles(a_) ->
+           if as_ =={(a_,t_)}
+           then manSync1_SessionKey.n_ -> 
+                  SessionKeyMonitor(n_,{})
+           else SessionKeyMonitor(n_,diff(as_,{(a_,t_)}))
+
+    -- Create sets of network events that SessionKeyMonitor's
+    -- int_Pick events will get renamed to.
+
+    makeSessionKeySERVER2_kab(S,kab) = 
+      {send.S.A.ALGEBRA_M::rmb((Msg2, Encrypt.(SKey__.(A), <na, B, kab>), <>)) |
+         A <- Agent, B <- Agent, na <- Nonce}
+
+    makeSessionKeySERVER2(S, k_) = makeSessionKeySERVER2_kab(S, k_)
+
+    -- Create sets of network events that SessionKeyMonitor's
+    -- int_Told events will get renamed to.
+
+    getSessionKeyINITIATOR2_kab(A,kab) =
+      {receive.S.A.ALGEBRA_M::rmb((Msg2, Encrypt.(SKey__.(A), <na, B, kab>), <>)) |
+         B <- Agent, na <- Nonce, S <- Server}
+
+    getSessionKeyINITIATOR2(A, k_) = getSessionKeyINITIATOR2_kab(A, k_)
+
+    getSessionKeyRESPONDER3_kab(B,kab) =
+      {receive.S.B.ALGEBRA_M::rmb((Msg3, Encrypt.(SKey__.(B), <kab, A>), <>)) |
+         A <- Agent, S <- Server}
+
+    getSessionKeyRESPONDER3(B, k_) = getSessionKeyRESPONDER3_kab(B, k_)
+
+    -- Rename int_Pick and int_Told events to network events.
+
+    SessionKeyRenMonitor(k_) =
+      SessionKeyMonitor(k_,{}) 
+        [[Stan_int_Pick2_SessionKey.k_ <- m_ |
+            m_ <- makeSessionKeySERVER2(Stan, k_)]]
+        [[Alice_int_Told2_SessionKey.k_ <- m_ |
+            m_ <- getSessionKeyINITIATOR2(Alice, k_)]]
+        [[Bob_int_Told3_SessionKey.k_ <- m_ |
+            m_ <- getSessionKeyRESPONDER3(Bob, k_)]]
+
+    alphaSessionKeyRenMonitor(k_) = 
+      Union({
+        {|close, manSync1_SessionKey.k_|},
+        makeSessionKeySERVER2(Stan, k_),
+        getSessionKeyINITIATOR2(Alice, k_),
+        getSessionKeyRESPONDER3(Bob, k_)
+      })
+
+    -- Cracker for type SessionKey
+
+    -- Keep track of who is running.  When signalled on
+    -- manSync1_SessionKey, wait for all those agents to close
+    -- (process SessionKeyCracker'), then crack key.
+
+    SessionKeyCracker(k_, S_) =
+      start?a_?t_:roles(a_) -> SessionKeyCracker(k_, union(S_,{(a_,t_)}))
+      [] close?a_?t_:roles(a_) ->SessionKeyCracker(k_, diff(S_,{(a_,t_)}))
+      [] manSync1_SessionKey.k_ ->
+           if S_=={} then crack.k_ -> SessionKeyCracker'(k_, S_)
+           else SessionKeyCracker'(k_, S_)
+
+    SessionKeyCracker'(k_, S_) =
+      start?a_?t_:roles(a_) -> SessionKeyCracker'(k_, S_)
+      [] close?a_?t_:roles(a_) ->
+           if S_=={(a_,t_)} then crack.k_ -> SessionKeyCracker'(k_, {})
+           else SessionKeyCracker'(k_, diff(S_,{(a_,t_)}))
+
+    -- Rename start events to network events.
+
+    SessionKeyCracker_r(n_) =
+      SessionKeyCracker(n_,{})
+        [[start.a_.INITIATOR_role <- env.a_.(Env0, m_, extras_) |
+            a_ <- HONEST, (Env0, m_, extras_) <- SYSTEM_M::ENV_MSG]]
+        [[start.a_.RESPONDER_role <- receive.b_.a_.(Msg3, m_, extras_) |
+            a_ <- HONEST, (Msg3, m_, extras_) <- SYSTEM_M::INPUT_MSG,
+            b_ <- ALL_PRINCIPALS]]
+        [[start.a_.SERVER_role <- receive.b_.a_.(Msg1, m_, extras_) |
+            a_ <- HONEST, (Msg1, m_, extras_) <- SYSTEM_M::INPUT_MSG,
+            b_ <- ALL_PRINCIPALS]]
+
+    alphaSessionKeyCracker_r(n_) = 
+      Union({
+        {|close, crack.n_, manSync1_SessionKey.n_|},
+        {env.a_.(Env0, m_, extras_) |
+            a_ <- HONEST, (Env0, m_, extras_) <- SYSTEM_M::ENV_MSG},
+        {receive.b_.a_.(Msg3, m_, extras_) |
+            a_ <- HONEST, (Msg3, m_, extras_) <- SYSTEM_M::INPUT_MSG,
+            b_ <- ALL_PRINCIPALS},
+        {receive.b_.a_.(Msg1, m_, extras_) |
+            a_ <- HONEST, (Msg1, m_, extras_) <- SYSTEM_M::INPUT_MSG,
+            b_ <- ALL_PRINCIPALS}
+      })
+
+    -- Put Cracker and Monitor together in parallel.
+
+    SessionKeyManSyncSet(n_) =
+      inter(alphaSessionKeyCracker_r(n_), alphaSessionKeyRenMonitor(n_))
+
+    SessionKeyMan1(n_) =
+      let Man1_0 =
+            SessionKeyCracker_r(n_)
+            [| SessionKeyManSyncSet(n_) |]
+            SessionKeyRenMonitor(n_)
+          Man1_1 = Man1_0 \ {manSync1_SessionKey.n_}
+      within chase(Man1_1)
+
+    alphaSessionKeyMan1(n_) =
+      diff(
+        union(alphaSessionKeyCracker_r(n_), alphaSessionKeyRenMonitor(n_)),
+        {manSync1_SessionKey.n_}
+      )
+
+  exports
+
+    -- Channel declarations used by SessionKeyMonitor.
+
+    channel manSync1_SessionKey : SessionKey
+    channel manSync2_SessionKey : SessionKey
+
+    -- A_int_ToldNT.x represents that Agent A acquires the value
+    -- x of type T for the first time in message number N.
+
+    channel Alice_int_Told2_SessionKey : SessionKey
+    channel Bob_int_Told3_SessionKey : SessionKey
+
+    -- The event A_int_PickNT.x represents that Agent A creates (or
+    -- introduces) the fresh value x of type T in message number N.
+
+    channel Stan_int_Pick2_SessionKey : SessionKey
+
+    -- Manager for all of SessionKey.
+
+    SessionKeyManager =
+      || n_:SessionKey @ [alphaSessionKeyMan1(n_)] SessionKeyMan1(n_)
+
+    alphaSessionKeyManager =
+      Union({alphaSessionKeyMan1(n_) | n_ <- SessionKey})
+
+  endmodule
+
+exports
+
+  ALL_CRACKABLES = SessionKey
+
+  -- Manager for all types.
+
+  Manager =
+    SessionKeyCRACKING_M::SessionKeyManager
+
+  AlphaManager = SessionKeyCRACKING_M::alphaSessionKeyManager
+
+endmodule
+
+ALL_CRACKABLES = CRACKING_M::ALL_CRACKABLES
+channel crack : ALL_CRACKABLES
 
 -- ************************************************************************
 -- *                             The Intruder                             *
@@ -549,32 +829,25 @@ module INTRUDER_M
   -- * ds_ is the set of deductions that use f_
 
   IGNORANT(f_,ms_,fss_,ds_) =
-    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
     []
     ([] fs_ : fss_, not(member(f_,fs_)) @ 
-        infer.(f_,fs_) -> KNOWS(f_,ms_,fss_,ds_))
-    [] tock -> (IGNORANT(f_,ms_,fss_,ds_)
-      -- We can only be the updated version if there is a fact that can
-      -- be updated to us.
-      [] card({f1_ | f1_ <- UpdateableFacts, updt(f1_) == f_, f_ != f1_}) > 0 &
-          tockInfer.f_ -> KNOWS(f_,ms_,fss_,ds_))
+        infer.(f_,fs_) -> KNOWS(f_,ms_,ds_))
+    []
+    member(f_, ALL_CRACKABLES) & crack.f_ -> KNOWS(f_,ms_,ds_)
 
   -- Component of intruder for known fact f_
 
-  KNOWS(f_,ms_,fss_,ds_) =
-    hear?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+  KNOWS(f_,ms_,ds_) =
+    hear?m_:ms_ -> KNOWS(f_,ms_,ds_)
     []
-    say?m_:ms_ -> KNOWS(f_,ms_,fss_,ds_)
+    say?m_:ms_ -> KNOWS(f_,ms_,ds_)
     [] 
-    ([] ded@@(f1_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,fss_,ds_))
+    ([] ded@@(f1_,fs_) : ds_, f1_!=f_ @ infer.ded -> KNOWS(f_,ms_,ds_))
     []
-    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,fss_,ds_)
-    [] tock ->
-      (if updt(f_) != f_ then
-        tockInfer.updt(f_) -> IGNORANT(f_,ms_,fss_,ds_)
-      else -- Allow more infers (consider if we obtain a fresher version of this message)
-        KNOWS(f_,ms_,fss_,ds_)
-        [] tockInfer.f_ -> KNOWS(f_,ms_,fss_,ds_))
+    member(f_,ALL_SECRETS) & leak.f_ -> KNOWS(f_,ms_,ds_)
+    []
+    member(f_, ALL_CRACKABLES) & crack.f_ -> KNOWS(f_,ms_,ds_)
 
   -- Alphabet of this component
 
@@ -583,7 +856,7 @@ module INTRUDER_M
            {hear.m_, say.m_ | m_ <- ms_},
            {infer.(f_,fs_) | fs_ <- fss_},
            {infer.(f1_,fs_) | (f1_,fs_) <- ds_},
-           {tock, tockInfer.f_, tockInfer.updt(f_)}
+           if member(f_, ALL_CRACKABLES) then {crack.f_} else {}
          })
 
   -- Set of all (f_, ms_, fss_, ds_) for which intruder components 
@@ -601,12 +874,24 @@ module INTRUDER_M
   BUILD_INTRUDER_0(INTRUDER_0) =
     ((chase(INTRUDER_0)
       [[ hear.m_ <- hear.m_, hear.m_ <- send.A_.B_.(l_,m_,se_) | 
-         (l_,m_,se_,re_) <- Union({SYSTEM_M::DIRECT_MSG1, SYSTEM_M::DIRECT_MSG2}), 
-         A_ <- diff(SenderType(l_),{Mallory}), 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), 
+         A_ <- diff(SenderType(l_),{Ivor}), 
          B_ <- ReceiverType(l_) ]] 
      [|{| hear |}|] STOP)
       [[ say.m_ <- receive.A_.B_.(l_,m_,re_) | 
-         (l_,m_,se_,re_) <- Union({SYSTEM_M::DIRECT_MSG1, SYSTEM_M::DIRECT_MSG2}), 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), 
          A_ <- SenderType(l_), 
          B_ <- ReceiverType(l_) ]] 
      [|{| say |}|] STOP)
@@ -622,11 +907,23 @@ module INTRUDER_M
     SAY_KNOWN_0(IK1)
       [[ dummy_leak <- leak.f_ | f_ <- inter(IK1, ALL_SECRETS) ]]
       [[ dummy_send <- dummy_send, dummy_send <- send.A_.B_.(l_,m_,se_) | 
-         (l_,m_,se_,re_) <- Union({SYSTEM_M::DIRECT_MSG1, SYSTEM_M::DIRECT_MSG2}), components_(m_) <= IK1, 
-         A_ <- diff(SenderType(l_),{Mallory}), 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), components_(m_) <= IK1, 
+         A_ <- diff(SenderType(l_),{Ivor}), 
          B_ <- ReceiverType(l_) ]] 
       [[ dummy_receive <- dummy_receive, dummy_receive <- receive.A_.B_.(l_,m_,re_) | 
-         (l_,m_,se_,re_) <- Union({SYSTEM_M::DIRECT_MSG1, SYSTEM_M::DIRECT_MSG2}), components_(m_) <= IK1, 
+         (l_,m_,se_,re_) <- Union({
+           SYSTEM_M::DIRECT_MSG1,
+           SYSTEM_M::DIRECT_MSG2,
+           SYSTEM_M::DIRECT_MSG3,
+           SYSTEM_M::DIRECT_MSG4,
+           SYSTEM_M::DIRECT_MSG5
+         }), components_(m_) <= IK1, 
          A_ <- SenderType(l_), 
          B_ <- ReceiverType(l_) ]] 
 
@@ -637,16 +934,20 @@ exports
   -- Types of sender and receiver of each message
 
   SenderType (Msg1) = Agent
-  SenderType (Msg2) = Agent
+  SenderType (Msg2) = Server
+  SenderType (Msg3) = Server
+  SenderType (Msg4) = Agent
+  SenderType (Msg5) = Agent
 
-  ReceiverType(Msg1) = Agent
+  ReceiverType(Msg1) = Server
   ReceiverType(Msg2) = Agent
+  ReceiverType(Msg3) = Agent
+  ReceiverType(Msg4) = Agent
+  ReceiverType(Msg5) = Agent
 
   -- Intruder's initial knowledge
 
-  IK0 = union({Alice, Bob, Mallory, Shared__.(Alice, Mallory), 
-             Shared__.(Mallory, Alice), Shared__.(Bob, Mallory), 
-             Shared__.(Mallory, Bob), Garbage}, TimeStamp)
+  IK0 = {Alice, Bob, Ivor, Stan, Ni, SKey__.(Ivor), Garbage}
 
   Deductions = Deductions_
 
@@ -677,7 +978,7 @@ KnowableFact = KnowableFact_
     (|| (f_,ms_,fss_,ds_) : f_ms_fss_ds_s(Deductions,LearnableFact) @ 
          [AlphaL(f_,ms_,fss_,ds_)] IGNORANT(f_,ms_,fss_,ds_))
 
-  INTRUDER_0 = INTRUDER_00(Deductions, LearnableFact) \ {|infer, tockInfer|}
+  INTRUDER_0 = INTRUDER_00(Deductions, LearnableFact) \ {|infer|}
 
   -- Set of all deductions that could occur
   COMBINED_DEDUCTIONS =
@@ -688,8 +989,6 @@ KnowableFact = KnowableFact_
   -- Declare channels:
   channel hear, say : MSG_BODY
   channel dummy_leak, dummy_send, dummy_receive
-  UpdateableFacts = union({f_ | (f_,fs_) <- COMBINED_DEDUCTIONS},KnowableFact)
-  channel tockInfer : UpdateableFacts
 
   -- Complete intruder
 
@@ -708,21 +1007,137 @@ channel infer : Deductions'
 
 IntruderInterface = 
   Union({
-    {| receive.Mallory.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
-    {| receive.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({SYSTEM_M::INPUT_MSG1, SYSTEM_M::INPUT_MSG2}) |},
-    {| send.A_.Mallory.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.Ivor.A_.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
+    {| receive.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::INPUT_MSG1,
+      SYSTEM_M::INPUT_MSG2,
+      SYSTEM_M::INPUT_MSG3,
+      SYSTEM_M::INPUT_MSG4,
+      SYSTEM_M::INPUT_MSG5
+    }) |},
+    {| send.A_.Ivor.m_ | A_ <- ALL_PRINCIPALS, m_ <- {} |},
     {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
     {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- {} |},
-    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({SYSTEM_M::OUTPUT_MSG1, SYSTEM_M::OUTPUT_MSG2}) |},
-    {tock}
+    {| send.A_.B_.m_ | A_ <- ALL_PRINCIPALS, B_ <- ALL_PRINCIPALS, m_ <- Union({
+      SYSTEM_M::OUTPUT_MSG1,
+      SYSTEM_M::OUTPUT_MSG2,
+      SYSTEM_M::OUTPUT_MSG3,
+      SYSTEM_M::OUTPUT_MSG4,
+      SYSTEM_M::OUTPUT_MSG5
+    }) |},
+    {|crack|}
   })
 
-SYSTEM = 
-  SYSTEM_M::SYSTEM_0 [| IntruderInterface |] INTRUDER_M::BUILD_INTRUDER(INTRUDER_M::INTRUDER_0)
+AlphaSystem = {|env, send, receive, close|}
+
+SystemManagerInterface = inter(AlphaSystem,CRACKING_M::AlphaManager)
+
+SYSTEM = (SYSTEM_M::SYSTEM_0 [|SystemManagerInterface|] CRACKING_M::Manager)
+            [|IntruderInterface|] INTRUDER_M::BUILD_INTRUDER(INTRUDER_M::INTRUDER_0)
 
 -- ************************************************************************
 -- *                    Specifications and Assertions                     *
 -- ************************************************************************
+
+module SECRET_M
+
+  -- Specification for single secret
+
+  SECRET_SPEC_0(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ ->
+      (if member(Ivor, Bs_) then SECRET_SPEC_0(s_)
+       else SECRET_SPEC_1(s_))
+    []
+    leak.s_ -> SECRET_SPEC_0(s_)
+    []
+    crack?k_ -> SECRET_SPEC_0(s_)
+  SECRET_SPEC_1(s_) = 
+    signal.Claim_Secret?A_!s_?Bs_ -> SECRET_SPEC_1(s_)
+    []
+    crack?k_ -> SECRET_SPEC_0(s_)
+  -- Specification for all secrets
+
+  AlphaS(s_) = 
+    Union({
+      {|signal.Claim_Secret.A_.s_ | A_ <- ALL_PRINCIPALS|},
+      {leak.s_}
+,
+    {|crack|}    })
+  -- Sequential version; secs_ is secrets that intruder must not learn
+
+  SEQ_SECRET_SPEC_0(secs_) =
+    scs?s_!IntIn -> SEQ_SECRET_SPEC_0(secs_)
+    []
+    card(secs_)<2 & scs?s_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(union(secs_,{s_}))
+    []
+    card(secs_)==2 & scs?s_:secs_!IntNotIn ->
+      SEQ_SECRET_SPEC_0(secs_)
+    []
+    leak?s_ : diff(ALL_SECRETS,secs_) -> SEQ_SECRET_SPEC_0(secs_)
+    []
+    crack?k_ -> SEQ_SECRET_SPEC_0(diff(secs_,{k_}))
+
+  isIntIn(S_) = if member(Ivor,S_) then IntIn else IntNotIn
+
+  Alpha_SECRETS =
+    Union({
+      {|leak, signal.Claim_Secret.A_ | A_ <- HONEST|},
+      {|crack|}
+    })
+
+  Alpha_SEQ_SECRETS = 
+    Union({
+      {|leak, scs|},
+      {|crack|}
+    })
+
+exports
+
+  SECRET_SPEC = (|| s_ : ALL_SECRETS @ [AlphaS(s_)] SECRET_SPEC_0(s_))
+
+  datatype IncInt = IntIn | IntNotIn
+
+  channel scs : ALL_SECRETS.IncInt
+
+  SEQ_SECRET_SPEC = SEQ_SECRET_SPEC_0({})
+
+  -- System for secrecy checking
+
+  SYSTEM_S = 
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+    within
+    SYSTEM
+      [[send.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>))
+          <- signal.Claim_Secret.A.ALGEBRA_M::applyRenaming(kab).{B}, 
+        receive.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>))
+          <- signal.Claim_Secret.B.ALGEBRA_M::applyRenaming(kab).{A} |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, nb <- Nonce_renamed_
+      ]] \ {| env, send, receive, close |}
+
+  SYSTEM_S_SEQ =
+    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
+    within
+    SYSTEM
+      [[send.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>))
+          <- scs.ALGEBRA_M::applyRenaming(kab).isIntIn({A, B}), 
+        receive.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>))
+          <- scs.ALGEBRA_M::applyRenaming(kab).isIntIn({B, A}) |
+            A <- Agent_renamed_, B <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, nb <- Nonce_renamed_
+      ]] \ {| env, send, receive, close |}
+
+endmodule
+
+-- Assertion of secrecy
+
+assert SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S
+assert SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ
 
 -- ************************************************************************
 -- *                 Authentication specification number 1                *
@@ -732,65 +1147,61 @@ module AUTH1_M
 
   -- Spec parameterized by name of agent being authenticated
 
-  AuthenticateINITIATORToRESPONDERTimedAgreement2_0(A) =
-    addTime(
-      signal.Running1.INITIATOR_role.A?B ->
-      signal.Commit1.RESPONDER_role.B.A -> STOP,
-      2)
+  AuthenticateRESPONDERToINITIATORAgreement_0(B) =
+    signal.Running1.RESPONDER_role.B?A ->
+    signal.Commit1.INITIATOR_role.A.B -> STOP
 
-  AlphaAuthenticateINITIATORToRESPONDERTimedAgreement2_0(A) =
-    union(
-      {|signal.Running1.INITIATOR_role.A.B,
-        signal.Commit1.RESPONDER_role.B.A |
-           B <- inter(Agent, HONEST)|},
-      {tock})
+  AlphaAuthenticateRESPONDERToINITIATORAgreement_0(B) =
+    {|signal.Running1.RESPONDER_role.B.A,
+      signal.Commit1.INITIATOR_role.A.B |
+         A <- inter(Agent, HONEST)|}
 
   -- Specs for particular agents being authenticated
 
-  AuthenticateINITIATORAliceToRESPONDERTimedAgreement2 =
-    AuthenticateINITIATORToRESPONDERTimedAgreement2_0(Alice)
+  AuthenticateRESPONDERAliceToINITIATORAgreement =
+    STOP
 
-  AuthenticateINITIATORBobToRESPONDERTimedAgreement2 =
-    RUN({tock})
+  AuthenticateRESPONDERBobToINITIATORAgreement =
+    AuthenticateRESPONDERToINITIATORAgreement_0(Bob)
 
   -- alphabet of specification
 
-  alphaAuthenticateINITIATORToRESPONDERTimedAgreement2 =
+  alphaAuthenticateRESPONDERToINITIATORAgreement =
     Union({
-      AlphaAuthenticateINITIATORToRESPONDERTimedAgreement2_0(Alice),
-      AlphaAuthenticateINITIATORToRESPONDERTimedAgreement2_0(Bob)
+      AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Alice),
+      AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Bob)
     })
 
 exports
 
   -- Specs for all agents being authenticated
 
-  AuthenticateINITIATORToRESPONDERTimedAgreement2 =
-    (AuthenticateINITIATORAliceToRESPONDERTimedAgreement2
-    [| inter(AlphaAuthenticateINITIATORToRESPONDERTimedAgreement2_0(Alice),
-             AlphaAuthenticateINITIATORToRESPONDERTimedAgreement2_0(Bob)) |]
-    AuthenticateINITIATORBobToRESPONDERTimedAgreement2)
+  AuthenticateRESPONDERToINITIATORAgreement =
+    (AuthenticateRESPONDERAliceToINITIATORAgreement
+    [| inter(AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Alice),
+             AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Bob)) |]
+    AuthenticateRESPONDERBobToINITIATORAgreement)
 
   -- System for authentication checking
 
   SYSTEM_1 =
     let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
-        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
     within
       SYSTEM
-       [[send.A.B.ALGEBRA_M::rmb((Msg1, Sq.<Timestamp.ta, Hash.(f, <Shared__.(A, B), Timestamp.ta, B>)>, <>)) <-
-          signal.Running1.INITIATOR_role.A.B,  
-        send.B.A.ALGEBRA_M::rmb((Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>, <>)) <-
-          signal.Commit1.RESPONDER_role.B.A |
-            A <- Agent_renamed_, B <- Agent_renamed_, 
-            Timestamp.ta <- TimeStamp_renamed_, 
-            Timestamp.tb <- TimeStamp_renamed_
+       [[send.B.A.ALGEBRA_M::rmb((Msg4, Encrypt.(kab, <nb>), <>)) <-
+          signal.Running1.RESPONDER_role.B.A,  
+        send.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>)) <-
+          signal.Commit1.INITIATOR_role.A.B |
+            B <- Agent_renamed_, A <- Agent_renamed_, 
+            kab <- SessionKey_renamed_, nb <- Nonce_renamed_
       ]]
-      \ diff(Events, alphaAuthenticateINITIATORToRESPONDERTimedAgreement2)
+      \ diff(Events, alphaAuthenticateRESPONDERToINITIATORAgreement)
 
 endmodule
 
-assert AUTH1_M::AuthenticateINITIATORToRESPONDERTimedAgreement2 [T= 
+assert AUTH1_M::AuthenticateRESPONDERToINITIATORAgreement [T= 
        AUTH1_M::SYSTEM_1
 
 -- ************************************************************************
@@ -840,16 +1251,16 @@ exports
 
   SYSTEM_2 =
     let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
-        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
+        SessionKey_renamed_ = ALGEBRA_M::applyRenamingToSet(SessionKey)
+        Nonce_renamed_ = ALGEBRA_M::applyRenamingToSet(Nonce)
     within
       SYSTEM
-       [[send.A.B.ALGEBRA_M::rmb((Msg1, Sq.<Timestamp.ta, Hash.(f, <Shared__.(A, B), Timestamp.ta, B>)>, <>)) <-
+       [[send.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>)) <-
           signal.Running2.INITIATOR_role.A.B,  
-        send.B.A.ALGEBRA_M::rmb((Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>, <>)) <-
+        receive.A.B.ALGEBRA_M::rmb((Msg5, Encrypt.(kab, <nb, nb>), <kab>)) <-
           signal.Commit2.RESPONDER_role.B.A |
             A <- Agent_renamed_, B <- Agent_renamed_, 
-            Timestamp.ta <- TimeStamp_renamed_, 
-            Timestamp.tb <- TimeStamp_renamed_
+            kab <- SessionKey_renamed_, nb <- Nonce_renamed_
       ]]
       \ diff(Events, alphaAuthenticateINITIATORToRESPONDERAgreement)
 
@@ -857,68 +1268,4 @@ endmodule
 
 assert AUTH2_M::AuthenticateINITIATORToRESPONDERAgreement [T= 
        AUTH2_M::SYSTEM_2
-
--- ************************************************************************
--- *                 Authentication specification number 3                *
--- ************************************************************************
-
-module AUTH3_M
-
-  -- Spec parameterized by name of agent being authenticated
-
-  AuthenticateRESPONDERToINITIATORAgreement_0(B) =
-    signal.Running3.RESPONDER_role.B?A ->
-    signal.Commit3.INITIATOR_role.A.B -> STOP
-
-  AlphaAuthenticateRESPONDERToINITIATORAgreement_0(B) =
-    {|signal.Running3.RESPONDER_role.B.A,
-      signal.Commit3.INITIATOR_role.A.B |
-         A <- inter(Agent, HONEST)|}
-
-  -- Specs for particular agents being authenticated
-
-  AuthenticateRESPONDERAliceToINITIATORAgreement =
-    STOP
-
-  AuthenticateRESPONDERBobToINITIATORAgreement =
-    AuthenticateRESPONDERToINITIATORAgreement_0(Bob)
-
-  -- alphabet of specification
-
-  alphaAuthenticateRESPONDERToINITIATORAgreement =
-    Union({
-      AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Alice),
-      AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Bob)
-    })
-
-exports
-
-  -- Specs for all agents being authenticated
-
-  AuthenticateRESPONDERToINITIATORAgreement =
-    (AuthenticateRESPONDERAliceToINITIATORAgreement
-    [| inter(AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Alice),
-             AlphaAuthenticateRESPONDERToINITIATORAgreement_0(Bob)) |]
-    AuthenticateRESPONDERBobToINITIATORAgreement)
-
-  -- System for authentication checking
-
-  SYSTEM_3 =
-    let Agent_renamed_ = ALGEBRA_M::applyRenamingToSet(Agent)
-        TimeStamp_renamed_ = ALGEBRA_M::applyRenamingToSet(TimeStamp)
-    within
-      SYSTEM
-       [[send.B.A.ALGEBRA_M::rmb((Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>, <>)) <-
-          signal.Running3.RESPONDER_role.B.A,  
-        receive.B.A.ALGEBRA_M::rmb((Msg2, Sq.<Timestamp.tb, Hash.(f, <Shared__.(A, B), Timestamp.tb, A>)>, <>)) <-
-          signal.Commit3.INITIATOR_role.A.B |
-            B <- Agent_renamed_, A <- Agent_renamed_, 
-            Timestamp.tb <- TimeStamp_renamed_
-      ]]
-      \ diff(Events, alphaAuthenticateRESPONDERToINITIATORAgreement)
-
-endmodule
-
-assert AUTH3_M::AuthenticateRESPONDERToINITIATORAgreement [T= 
-       AUTH3_M::SYSTEM_3
 

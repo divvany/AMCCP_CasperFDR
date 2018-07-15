@@ -5,8 +5,7 @@
 
         <h1>
 
-            Casper & FDR
-
+            Formal verification results
 
         </h1>
 
@@ -48,10 +47,15 @@
 
                     <div class="box-header">
                         <h3 class="box-title">File: <?php
-                            echo $filename;
+
+
+                            if (isset($_SESSION['fileName'])) {
+                                echo $_SESSION['fileName'];
+                            } else {
+                                echo $filename;
+                            }
 
                             if (strpos($filename, 'Error') === false) {
-
                                 $ok = 1;
 
                             } else {
@@ -68,10 +72,22 @@
                         </h3>
 
 
-                        <button type="button" class="btn btn-primary pull-right" data-toggle="modal"
-                                data-target="#modal-default" onclick="reprezentProtocol()">
-                            Protocol representation
-                        </button>
+                        <?php
+
+                        if (isset($prop_strings)) {
+                            ?>
+
+                            <button type="button" class="btn btn-primary pull-right" data-toggle="modal"
+                                    data-target="#modal-reprez" onclick="representProtocol()">
+                                Protocol representation
+                            </button>
+
+
+                            <?php
+
+                        }
+                        ?>
+
 
                     </div>
 
@@ -83,7 +99,7 @@
                         ?>
 
 
-                        <div class="modal fade" id="modal-default">
+                        <div class="modal fade" id="modal-reprez">
 
 
                             <div class="modal-dialog">
@@ -92,7 +108,18 @@
 
                                     <div class="modal-header">
 
-                                        <h3 style="color: #1d5da8" class="modal-title">Protocol representation</h3>
+                                        <h3 style="color: #1d5da8" class="modal-title">
+
+
+                                            <?php
+
+                                            if (strcmp($_SESSION['fileName'], "file.spl") !== 0) {
+                                                echo $_SESSION['fileName'] . " - ";
+                                            }
+                                            ?>
+
+
+                                            Protocol representation</h3>
 
 
                                     </div>
@@ -685,6 +712,9 @@
     var free_vars = '<?=$free_vars?>';
     var protocolDescription = '<?=$description?>';
 
+    var bobFlag = true;
+
+
     var protocolAgents = agents.split("*");
     var protocolFreeVars = free_vars.split("*");
     protocolDescription = protocolDescription.split("*");
@@ -729,6 +759,14 @@
                     agentsArray += tokens[0];
 
                 }
+
+                if (tokens[1].trim().localeCompare("Bank") === 0) {
+
+                    agentsArray += tokens[0];
+                    bobFlag = false;
+
+                }
+
             }
 
         }
@@ -771,6 +809,15 @@
                         freeVarsArray += tokens[0];
 
                     }
+
+
+                    if (tokens[1].trim().localeCompare("Bank") === 0) {
+
+                        freeVarsArray += tokens[0];
+                        bobFlag = false;
+
+                    }
+
                 }
             }
         }
@@ -810,13 +857,12 @@
     }
 
 
-    function reprezentProtocol() {
+    function representProtocol() {
 
         if (ok) {
 
             var canvas = document.getElementById('protocol-desc');
-            // var modal = document.getElementById('modal-default');
-            // modal.style.width = "800px !important";
+
             var context = canvas.getContext('2d');
             context.lineWidth = 1;
 
@@ -841,6 +887,7 @@
                 canvas.style.padding = "0px 0px 0px 24%";
             }
             else {
+                canvas.style.padding = "0px 0px 0px 0px";
                 horizoltalArrowLength = 250;
                 canvas.width = 585;
 
@@ -894,7 +941,15 @@
 
                     if (agentNames[i].localeCompare("B") === 0) {
 
-                        context.fillText("Bob", (xStart - ("Bob".length * 9) / 2), 22);
+                        if (bobFlag) {
+
+                            context.fillText("Bob", (xStart - ("Bob".length * 9) / 2), 22);
+
+                        }
+                        else {
+                            context.fillText("Bank", (xStart - ("Bob".length * 9) / 2), 22);
+                        }
+
                         xStart += horizoltalArrowLength;
                         continue;
 

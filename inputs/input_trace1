@@ -1,7 +1,4 @@
 interpret
-close.Stan.SERVER_role
-tock
-tock
-crack.Kab
-signal.Commit2.RESPONDER_role.Bob.Alice
+signal.Running4.INITIATOR_role.A.I.Na.Nb
+signal.Commit4.RESPONDER_role.B.A.Na.Nb
 

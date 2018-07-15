@@ -228,97 +228,101 @@ class CheckProtocol extends CI_Controller
 
         $finalPropStrings = array();
 
-
-        foreach ($propertyStrings as $j => $propertyString) {
-            $finalPropStrings[$j]["checked"] = false;
-            $finalPropStrings[$j]["string"] = "";
-            $finalPropStrings[$j]["nr"] = $counterexampleStrings[$j];
-
-        }
+        if (count($propertyStrings) > 0) {
 
 
-        if ($specification !== "") {
+            foreach ($propertyStrings as $j => $propertyString) {
+                $finalPropStrings[$j]["checked"] = false;
+                $finalPropStrings[$j]["string"] = "";
+                $finalPropStrings[$j]["nr"] = $counterexampleStrings[$j];
 
-            $tokens = explode("*", $specification);
-
-            $nrSecret = 0;
-
-            foreach ($tokens as $k => $token) {
-
-                $aux = explode("(", $token);
-
-                $property = trim($aux[0]);
-
-                $secret = false;
-
-                foreach ($propertyStrings as $j => $propertyString) {
+            }
 
 
-                    if (stripos($propertyString, $property) !== false) {
+            if ($specification !== "") {
 
-                        if (!$finalPropStrings[$j]["checked"]) {
+                $tokens = explode("*", $specification);
 
-                            if (strcmp($property, "Agreement") === 0) {
+                $nrSecret = 0;
 
-                                $actors = explode(",", $aux[1]);
+                foreach ($tokens as $k => $token) {
 
-                                if ((stripos($actors[0], "b") !== false) && (strpos($propertyString, "RESPONDERToINITIATORAgreement") !== false)) {
+                    $aux = explode("(", $token);
 
-                                    $finalPropStrings[$j]["string"] = $token;
-                                    $finalPropStrings[$j]["checked"] = true;
+                    $property = trim($aux[0]);
 
-                                }
+                    $secret = false;
 
-                                if ((stripos($actors[0], "a") !== false) && (strpos($propertyString, "INITIATORToRESPONDERAgreement") !== false)) {
-
-                                    $finalPropStrings[$j]["string"] = $token;
-                                    $finalPropStrings[$j]["checked"] = true;
-
-                                }
+                    foreach ($propertyStrings as $j => $propertyString) {
 
 
-                            } else {
+                        if (stripos($propertyString, $property) !== false) {
 
+                            if (!$finalPropStrings[$j]["checked"]) {
 
-                                if (strcmp($property, "Secret") === 0) {
+                                if (strcmp($property, "Agreement") === 0) {
 
-                                    if (!$secret) {
+                                    $actors = explode(",", $aux[1]);
+
+                                    if ((stripos($actors[0], "b") !== false) && (strpos($propertyString, "RESPONDERToINITIATORAgreement") !== false)) {
 
                                         $finalPropStrings[$j]["string"] = $token;
                                         $finalPropStrings[$j]["checked"] = true;
-                                        $secret = true;
-                                        $nrSecret++;
+
                                     }
+
+                                    if ((stripos($actors[0], "a") !== false) && (strpos($propertyString, "INITIATORToRESPONDERAgreement") !== false)) {
+
+                                        $finalPropStrings[$j]["string"] = $token;
+                                        $finalPropStrings[$j]["checked"] = true;
+
+                                    }
+
 
                                 } else {
 
-                                    $finalPropStrings[$j]["string"] = $token;
-                                    $finalPropStrings[$j]["checked"] = true;
+
+                                    if (strcmp($property, "Secret") === 0) {
+
+                                        if (!$secret) {
+
+                                            $finalPropStrings[$j]["string"] = $token;
+                                            $finalPropStrings[$j]["checked"] = true;
+                                            $secret = true;
+                                            $nrSecret++;
+                                        }
+
+                                    } else {
+
+                                        $finalPropStrings[$j]["string"] = $token;
+                                        $finalPropStrings[$j]["checked"] = true;
+
+                                    }
+
 
                                 }
 
 
                             }
 
-
                         }
+
+                    }
+
+                    if ($nrSecret !== 2) {
+                        $finalPropStrings[1]["string"] = $finalPropStrings[0]["string"];
 
                     }
 
                 }
 
-                if ($nrSecret !== 2) {
-                    $finalPropStrings[1]["string"] = $finalPropStrings[0]["string"];
-
-                }
 
             }
 
 
+            $data["prop_strings"] = $finalPropStrings;
+
         }
-
-        $data["prop_strings"] = $finalPropStrings;
-
 
         $this->load->view('checkProtocol/index', $data);
         $this->load->view('includes/footer');

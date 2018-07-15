@@ -1,52 +1,66 @@
--- 6.2.3. ISO Two-Pass Mutual Authentication with CCF's
+-- Needham Schroeder Shared Key Protocol, with key compromise
 
 #Free variables
 
-A,B : Agent
-ta,tb : TimeStamp
-f : HashFunction
-Shared : Agent x Agent -> SharedKey
-InverseKeys = (Shared,Shared)
+A, B   : Agent
+S      : Server
+na, nb : Nonce
+SKey   : Agent -> ServerKey
+kab   : SessionKey
+
+InverseKeys = (SKey,SKey), (kab,kab)
 
 #Processes
 
-INITIATOR(A) knows Shared(A,B)
-RESPONDER(B) knows Shared(A,B) 
+INITIATOR(A,S,na) knows SKey(A) 
+RESPONDER(B,nb) knows SKey(B) 
+SERVER(S,kab) knows SKey
 
 #Protocol description
 
-0.    -> A : B
+0.   -> A : B
 [A != B]
-1.  A -> B : ta,f(Shared(A,B),ta,B)
-[ta==now or ta+1==now]
-2.  B -> A : tb,f(Shared(A,B),tb,A)
-[tb==now or tb+1==now]
+1. A -> S : A, B, na
+2. S -> A : {na, B, kab}{SKey(A)} 
+3. S -> B : {kab,A}{SKey(B)}
+[A != B]
+4. B -> A : {nb}{kab}
+[A != B]
+5. A -> B : {nb,nb}{kab}
 
 #Specification
 
 -- PASS
-TimedAgreement(A,B,2,[])
--- PASS
-Agreement(A,B,[])
--- PASS
-Agreement(B,A,[])
+Agreement(B, A, [])
+-- FAIL
+Agreement(A, B, [])
+-- FAIL
+Secret(A, kab, [B])
+-- FAIL
+Secret(B, kab, [A])
 
 #Actual variables
 
-Alice, Bob, Mallory : Agent
-TimeStamp = 0 .. 2
-MaxRunTime = 1
+Alice, Bob, Ivor  : Agent
+Stan              : Server
+Na, Nb, Ni        : Nonce
+Kab               : SessionKey
 
-#Functions
+InverseKeys = (Kab,Kab)
 
-symbolic Shared
+#Inline functions
 
-#System
+symbolic SKey
 
-INITIATOR(Alice)
-RESPONDER(Bob)
+#System 
+
+INITIATOR(Alice, Stan, Na)
+RESPONDER(Bob, Nb)
+SERVER(Stan,Kab)
+-- WithdrawOption = True
 
 #Intruder Information
 
-Intruder = Mallory
-IntruderKnowledge = {Alice,Bob,Mallory,Shared(Alice,Mallory),Shared(Mallory,Alice),Shared(Bob,Mallory),Shared(Mallory,Bob)}
+Intruder = Ivor
+IntruderKnowledge = {Alice, Bob, Ivor, Stan, Ni, SKey(Ivor)}
+Crackable = SessionKey

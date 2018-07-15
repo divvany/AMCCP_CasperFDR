@@ -20,7 +20,6 @@ class Home extends CI_Controller
     {
 
         $this->load->view('includes/header');
-//		$this->load->view('welcome_message');
 
 
         $this->load->helper('directory');
@@ -32,34 +31,7 @@ class Home extends CI_Controller
         $data["folders"] = $map;
 
 
-        if (isset($_POST['downFile'])) {
-
-
-            if (isset($_POST['fileContent'])) {
-
-                $data = trim($_POST['fileContent']);
-
-                $file_content = str_replace("\r", "", $data);
-
-                $this->load->helper('download');
-
-                if (isset($_SESSION['fileSave'])) {
-                    $filename = $_SESSION['fileSave'];
-                } else {
-
-                    $filename = "file.spl";
-
-                }
-
-                force_download($filename, $file_content);
-
-            }
-
-        }
-
-
         $this->load->view('home/index', $data);
-
 
         $this->load->view('includes/footer');
 
@@ -150,7 +122,7 @@ class Home extends CI_Controller
     public function setFileName()
     {
 
-        $_SESSION['fileSave'] = $_POST['file_n'];
+        $_SESSION['fileName'] = $_POST['file_n'];
 
     }
 

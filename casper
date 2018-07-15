@@ -18,7 +18,7 @@ HUGSBIN=/usr/bin
 # start-up files
 CASPERBASE=${CASPERBASE-/var/www/html/}
 
-FILES="${CASPERBASE}/Casper/Main.lhs"
+FILES="${CASPERBASE}/program_files_casper/Main.lhs"
 
 # next, command line argument settings. 
 HUGSARGS=${HUGSARGS-"+l -s -h2500000"}

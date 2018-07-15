@@ -1,11 +1,8 @@
 interpret
-receive.Alice.Stan.(Msg1,Sq.<Alice,Bob,Ni>,<>)
-send.Stan.Alice.(Msg2,Encrypt.(SKey__.Alice,<Ni,Bob,Kab>),<>)
-send.Stan.Bob.(Msg3,Encrypt.(SKey__.Bob,<Kab,Alice>),<>)
-close.Stan.SERVER_role
-tock
-receive.Stan.Bob.(Msg3,Encrypt.(SKey__.Bob,<Kab,Alice>),<>)
-send.Bob.Alice.(Msg4,Encrypt.(Kab,<Nb>),<>)
-tock
-crack.Kab
+env.A.(Env0,I,<Na,I>)
+send.A.I.(Msg1,Encrypt.(PK__.I,<Na,A>),<>)
+receive.A.B.(Msg1,Encrypt.(PK__.B,<Na,A>),<>)
+send.B.A.(Msg2,Encrypt.(PK__.A,<Na,Nb>),<Na,Nb>)
+receive.I.A.(Msg2,Encrypt.(PK__.A,<Na,Nb>),<Nb>)
+send.A.I.(Msg3,Encrypt.(PK__.I,<Nb>),<Na,Nb>)
 

@@ -3,39 +3,293 @@
   "license_type": "Academic license for non-commercial use only",
   "results": [
     {
-      "assertion_string": "AUTH1_M::AuthenticateINITIATORToRESPONDERTimedAgreement2\n    [T= AUTH1_M::SYSTEM_1",
+      "assertion_string": "SECRET_M::SECRET_SPEC [T= SECRET_M::SYSTEM_S",
+      "errors": [],
+      "is_negated": 0,
+      "result": 0,
+      "visited_states": 141,
+      "visited_transitions": 562,
+      "visited_plys": 7,
+      "counterexamples": [
+        {
+          "type": "trace",
+          "specification_behaviour": {
+            "machine_name": "normal(SECRET_M::SECRET_SPEC)",
+            "type": "trace",
+            "error_event": 0,
+            "trace": [
+              11,
+              0,
+              0,
+              0,
+              36,
+              0,
+              38
+            ],
+            "states": [
+              "normal(SECRET_M::SECRET_SPEC)",
+              "normal(SECRET_M::SECRET_SPEC)",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "normal(SECRET_M::SECRET_SPEC)",
+              "<unchanged>",
+              "<unnamed>"
+            ]
+          },
+          "implementation_behaviour": {
+            "machine_name": "SECRET_M::SYSTEM_S",
+            "type": "trace",
+            "error_event": 28,
+            "trace": [
+              11,
+              1,
+              1,
+              1,
+              36,
+              1,
+              38
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "assertion_string": "SECRET_M::SEQ_SECRET_SPEC [T= SECRET_M::SYSTEM_S_SEQ",
+      "errors": [],
+      "is_negated": 0,
+      "result": 0,
+      "visited_states": 141,
+      "visited_transitions": 562,
+      "visited_plys": 7,
+      "counterexamples": [
+        {
+          "type": "trace",
+          "specification_behaviour": {
+            "machine_name": "normal(SECRET_M::SEQ_SECRET_SPEC_0({}))",
+            "type": "trace",
+            "error_event": 0,
+            "trace": [
+              2253,
+              0,
+              0,
+              0,
+              2254,
+              0,
+              2258
+            ],
+            "states": [
+              "normal(SECRET_M::SEQ_SECRET_SPEC_0({}))",
+              "normal(SECRET_M::SEQ_SECRET_SPEC_0({}))",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "normal(SECRET_M::SEQ_SECRET_SPEC_0({}))",
+              "<unchanged>",
+              "<unnamed>"
+            ]
+          },
+          "implementation_behaviour": {
+            "machine_name": "SECRET_M::SYSTEM_S_SEQ",
+            "type": "trace",
+            "error_event": 28,
+            "trace": [
+              2253,
+              1,
+              1,
+              1,
+              2254,
+              1,
+              2258
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "assertion_string": "AUTH1_M::AuthenticateINITIATORToRESPONDERAliveness\n    [T= AUTH1_M::SYSTEM_1",
       "errors": [],
       "is_negated": 0,
       "result": 1,
-      "visited_states": 194,
-      "visited_transitions": 636,
+      "visited_states": 145,
+      "visited_transitions": 551,
       "visited_plys": 10,
       "counterexamples": []
     },
     {
-      "assertion_string": "AUTH2_M::AuthenticateINITIATORToRESPONDERAgreement\n    [T= AUTH2_M::SYSTEM_2",
+      "assertion_string": "AUTH2_M::AuthenticateINITIATORToRESPONDERWeakAgreement\n    [T= AUTH2_M::SYSTEM_2",
       "errors": [],
       "is_negated": 0,
-      "result": 1,
-      "visited_states": 194,
-      "visited_transitions": 636,
-      "visited_plys": 10,
-      "counterexamples": []
+      "result": 0,
+      "visited_states": 126,
+      "visited_transitions": 492,
+      "visited_plys": 6,
+      "counterexamples": [
+        {
+          "type": "trace",
+          "specification_behaviour": {
+            "machine_name": "normal(AUTH2_M::AuthenticateINITIATORToRESPONDERWeakAgreement)",
+            "type": "trace",
+            "error_event": 0,
+            "trace": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "states": [
+              "normal(AUTH2_M::AuthenticateINITIATORToRESPONDERWeakAgreement)",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>"
+            ]
+          },
+          "implementation_behaviour": {
+            "machine_name": "AUTH2_M::SYSTEM_2",
+            "type": "trace",
+            "error_event": 2335,
+            "trace": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        }
+      ]
     },
     {
-      "assertion_string": "AUTH3_M::AuthenticateRESPONDERToINITIATORAgreement\n    [T= AUTH3_M::SYSTEM_3",
+      "assertion_string": "AUTH3_M::AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_na_nb\n    [T= AUTH3_M::SYSTEM_3",
+      "errors": [],
+      "is_negated": 0,
+      "result": 0,
+      "visited_states": 126,
+      "visited_transitions": 492,
+      "visited_plys": 6,
+      "counterexamples": [
+        {
+          "type": "trace",
+          "specification_behaviour": {
+            "machine_name": "normal(AUTH3_M::AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_na_nb)",
+            "type": "trace",
+            "error_event": 0,
+            "trace": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "states": [
+              "normal(AUTH3_M::AuthenticateINITIATORToRESPONDERNonInjectiveAgreement_na_nb)",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>"
+            ]
+          },
+          "implementation_behaviour": {
+            "machine_name": "AUTH3_M::SYSTEM_3",
+            "type": "trace",
+            "error_event": 2621,
+            "trace": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "assertion_string": "AUTH4_M::AuthenticateINITIATORToRESPONDERAgreement_na_nb\n    [T= AUTH4_M::SYSTEM_4",
+      "errors": [],
+      "is_negated": 0,
+      "result": 0,
+      "visited_states": 126,
+      "visited_transitions": 492,
+      "visited_plys": 6,
+      "counterexamples": [
+        {
+          "type": "trace",
+          "specification_behaviour": {
+            "machine_name": "normal(AUTH4_M::AuthenticateINITIATORToRESPONDERAgreement_na_nb)",
+            "type": "trace",
+            "error_event": 0,
+            "trace": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "states": [
+              "normal(AUTH4_M::AuthenticateINITIATORToRESPONDERAgreement_na_nb)",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>",
+              "<unchanged>"
+            ]
+          },
+          "implementation_behaviour": {
+            "machine_name": "AUTH4_M::SYSTEM_4",
+            "type": "trace",
+            "error_event": 3674,
+            "trace": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "assertion_string": "AUTH5_M::AuthenticateRESPONDERToINITIATORAgreement_na_nb\n    [T= AUTH5_M::SYSTEM_5",
       "errors": [],
       "is_negated": 0,
       "result": 1,
-      "visited_states": 196,
-      "visited_transitions": 640,
+      "visited_states": 149,
+      "visited_transitions": 567,
       "visited_plys": 10,
       "counterexamples": []
     }
   ],
   "print_statement_results": [],
-  "file_name": ".\/documents\/file.csp",
-  "event_map": {},
+  "file_name": ".\/documents\/Normal\/NS3.csp",
+  "event_map": {
+    "0": "0",
+    "1": "τ",
+    "11": "signal.Claim_Secret.A.Na.{I}",
+    "28": "leak.Nb",
+    "36": "signal.Claim_Secret.A.Nb.{I}",
+    "38": "signal.Claim_Secret.B.Nb.{A}",
+    "2253": "SECRET_M::scs.Na.SECRET_M::IntIn",
+    "2254": "SECRET_M::scs.Nb.SECRET_M::IntIn",
+    "2258": "SECRET_M::scs.Nb.SECRET_M::IntNotIn",
+    "2335": "signal.Commit2.RESPONDER_role.B.A",
+    "2621": "signal.Commit3.RESPONDER_role.B.A.Na.Nb",
+    "3674": "signal.Commit4.RESPONDER_role.B.A.Na.Nb"
+  },
   "warnings": [],
   "errors": []
 }
