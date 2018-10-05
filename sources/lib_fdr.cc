@@ -178,31 +178,6 @@ static int main_function(int& argc, char**& argv)
                 << ", found " << assertion->counterexamples().size()
                 << " counterexamples" << std::endl;
 
-	        //std::cout << assertion.BFSRefinementProgress() << std::endl;
-		//const std::shared_ptr <FDR::Assertions::BFSRefinementProgress> prog_ref(new FDR::Assertions::BFSRefinementProgress);
-
-		//const std::shared_ptr <FDR::Assertions::Progress> prog;
-
-		//std::cout<< prog->plys()<< std::endl;
-
-		//std::cout <<
-		 //std::shared_ptr<FDR::Assertions::Progress>& prog =  FDR::Assertions::Assertion::progress() << std::endl;
-
-		 //const std::shared_ptr<FDR::Assertions::Progress> prog =  assertion->progress();
-
-		// std::cout << prog << std::endl;
-
-		
-
-	    	//FDR::Assertions::BFSRefinementProgress* prog = new FDR::Assertions::BFSRefinementProgress();
-
-		//std::cout << prog->plys() << std::endl; 
-
-		//assertion->progress() = prog_ref;
-
-
-		//std::cout << prog_ref->plys() << std::endl; 
-
            
             for (const std::shared_ptr<FDR::Assertions::Counterexample>&
                     counterexample : assertion->counterexamples())

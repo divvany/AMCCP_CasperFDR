@@ -265,12 +265,14 @@
                                             <span id="visTranz<?= $k; ?>"></span>
                                         </td>
                                         <td>
-                                            <?php
 
-                                            echo($string['result']);
+                                            <div style="padding-bottom: 3%">
+                                                <?php
+
+                                                echo($string['result']);
 
 
-                                            if (strpos($string['result'], '0') === false) {
+                                                if (strpos($string['result'], '0') === false) {
 
                                                 ?>
 
@@ -285,17 +287,17 @@
 
 
                                                 ?>
+                                            </div>
 
+                                            <button class="btn btn-primary pull-right showState"
+                                                    id="showCounterexButton<?= $nrCEX; ?>"
+                                                    onclick="showCounterex(<?= $nrCEX ?>, '<?= $casperFullTrace[$nrCEX] ?>')">
+                                                Show
+                                            </button>
 
-                                                <button class="btn btn-primary pull-right showState"
-                                                        id="showCounterexButton<?= $nrCEX; ?>"
-                                                        onclick="showCounterex(<?= $nrCEX ?>, '<?= $casperFullTrace[$nrCEX] ?>')">
-                                                    Show
-                                                </button>
+                                            <?php
 
-                                                <?php
-
-                                                $nrCEX++;
+                                            $nrCEX++;
 
                                             }
                                             ?>
@@ -784,9 +786,9 @@
 
                     tokens = protocolFreeVars[i].split(":");
 
-                    freeVarsArray += tokens[0];
+                    freeVarsArray += tokens[0].trim();
                     freeVarsArray += ",";
-                    auxAgentsArray += tokens[1];
+                    auxAgentsArray += tokens[1].trim();
                     auxAgentsArray += ",";
 
 
@@ -799,21 +801,21 @@
                     tokens = protocolFreeVars[i].split(":");
                     if (tokens[1].trim().localeCompare("Agent") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
                         freeVarsArray += ",";
 
                     }
 
                     if (tokens[1].trim().localeCompare("Server") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
 
                     }
 
 
                     if (tokens[1].trim().localeCompare("Bank") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
                         bobFlag = false;
 
                     }

@@ -43,17 +43,25 @@ class CheckProtocol extends CI_Controller
 
             $data['fdr_version'] = $info[0];
 
-            if (strpos($info[1], 'file') === false) {
+            if (count($info) > 1) {
 
-                $info[1] = str_replace("./documents", "CasperLibrary", $info[1]);
+                if (strpos($info[1], 'file') === false) {
 
+                    $info[1] = str_replace("./documents", "CasperLibrary", $info[1]);
+
+                } else {
+
+                    $info[1] = str_replace("./documents/", "", $info[1]);
+
+                }
+
+                $data['filename'] = $info[1];
             } else {
 
-                $info[1] = str_replace("./documents/", "", $info[1]);
-
+                $data['filename'] = "";
             }
 
-            $data['filename'] = $info[1];
+
 
 
             $nrStrings = 0;

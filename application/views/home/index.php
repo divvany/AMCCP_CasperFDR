@@ -73,14 +73,13 @@
 
                         <span class="pull-right">&nbsp;  &nbsp;  &nbsp; </span>
 
-                        <button type="button" class="btn btn-primary pull-right" data-toggle="modal"
+                        <button id="represent" type="button" class="btn btn-primary pull-right" data-toggle="modal"
                                 data-target="#modal-reprez" onclick="representProtocol()">
                             Represent protocol
                         </button>
 
 
                         <div class="modal fade" id="modal-reprez">
-
 
                             <div class="modal-dialog">
 
@@ -248,6 +247,8 @@
 
 <script type="text/javascript">
 
+    $('#represent').hide();
+
     var file_name = '';
     var file_path = '';
     var textArea = document.getElementById("textArea");
@@ -329,6 +330,18 @@
 
 
     function getProtocolInfo(fileContent) {
+
+        protocolAgents = [];
+        protocolFreeVars = [];
+        protocolDescription = [];
+
+        freeVars = [];
+        agentNames = [];
+        bobFlag = true;
+
+
+        originalIntruderName = "";
+        intruderName = "";
 
 
         if (fileContent.includes("#Free variables")) {
@@ -514,21 +527,29 @@
                 tokens = protocolAgents[i].split(":");
                 if (tokens[1].trim().localeCompare("Agent") === 0) {
 
-                    agentsArray += tokens[0];
+                    agentsArray += tokens[0].trim();
                     agentsArray += ",";
 
                 }
 
+                if (tokens[1].trim().localeCompare("Host") === 0) {
+
+                    agentsArray += tokens[0].trim();
+                    agentsArray += ",";
+
+                }
+
+
                 if (tokens[1].trim().localeCompare("Server") === 0) {
 
-                    agentsArray += tokens[0];
+                    agentsArray += tokens[0].trim();
 
 
                 }
 
                 if (tokens[1].trim().localeCompare("Bank") === 0) {
 
-                    agentsArray += tokens[0];
+                    agentsArray += tokens[0].trim();
                     bobFlag = false;
 
                 }
@@ -552,9 +573,9 @@
 
                     tokens = protocolFreeVars[i].split(":");
 
-                    freeVarsArray += tokens[0];
+                    freeVarsArray += tokens[0].trim();
                     freeVarsArray += ",";
-                    auxAgentsArray += tokens[1];
+                    auxAgentsArray += tokens[1].trim();
                     auxAgentsArray += ",";
 
 
@@ -567,20 +588,29 @@
                     tokens = protocolFreeVars[i].split(":");
                     if (tokens[1].trim().localeCompare("Agent") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
                         freeVarsArray += ",";
 
                     }
 
+
+                    if (tokens[1].trim().localeCompare("Host") === 0) {
+
+                        freeVarsArray += tokens[0].trim();
+                        freeVarsArray += ",";
+
+                    }
+
+
                     if (tokens[1].trim().localeCompare("Server") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
 
 
                     }
                     if (tokens[1].trim().localeCompare("Bank") === 0) {
 
-                        freeVarsArray += tokens[0];
+                        freeVarsArray += tokens[0].trim();
                         bobFlag = false;
                     }
 
@@ -593,7 +623,7 @@
         if (auxAgentsArray.length !== 0) {
             agentsArray = auxAgentsArray;
         }
-        // alert(freeVarsArray);
+
 
         var items = freeVarsArray.split(",");
 
@@ -607,6 +637,11 @@
 
         items = agentsArray.split(",");
 
+
+        if ((items.length === 2) && (items[0].localeCompare("Mallory") === 0)) {
+            items = freeVarsArray.split(",");
+        }
+
         agentNames = [];
 
         for (i = 0; i < items.length; i++) {
@@ -619,6 +654,8 @@
     }
 
     function addText(folder, file) {
+
+        $('#represent').show();
 
 
         path = "examples_library/";
@@ -669,6 +706,7 @@
     function addTextFromFile() {
 
 
+        $('#represent').show();
         $('#fileName').hide();
         $('#theWord').show();
         $('#splWord').show();
@@ -893,7 +931,7 @@
             }
             else {
                 canvas.style.padding = "0px 0px 0px 0px";
-                horizoltalArrowLength = 250;
+                horizoltalArrowLength = 260;
                 canvas.width = 585;
 
             }
@@ -937,14 +975,21 @@
 
                 if ((agentNames[i].localeCompare(originalIntruderName) !== 0) && (agentNames[i].localeCompare(intruderName) !== 0)) {
 
-                    if (agentNames[i].localeCompare("A") === 0) {
+                    if ((agentNames[i].localeCompare("A") === 0) || (agentNames[i].localeCompare("a") === 0)) {
 
                         context.fillText("Alice", (xStart + 10 - ("Alice".length * 9) / 2), 22);
                         xStart += horizoltalArrowLength;
                         continue;
                     }
 
-                    if (agentNames[i].localeCompare("B") === 0) {
+                    if (agentNames[i].localeCompare("s") === 0) {
+
+                        context.fillText("Server", (xStart + 10 - ("Server".length * 9) / 2), 22);
+                        xStart += horizoltalArrowLength;
+                        continue;
+                    }
+
+                    if ((agentNames[i].localeCompare("B") === 0) || ((agentNames[i].localeCompare("b") === 0))) {
 
                         if (bobFlag) {
 
@@ -1098,9 +1143,18 @@
 
             context.beginPath();
             context.fillStyle = messageColor;
-            context.font = "bold 12px Arial";
 
-            context.fillText(message, xStart + (length - 29 - (5 * message.length)) / 2, yStart - 6);
+            if (message.includes("pb, hash( pb, secret1%hash(secret0) )%proof1 }{PK(C)")) {
+                message = '{pb,hash(pb,secret1%hash(secret0))%proof1}{PK(C)}';
+                context.font = "bold 10px Arial";
+                context.fillText(message, xStart + (length - 12 - (5 * message.length)) / 2, yStart - 6);
+            }
+            else {
+                context.font = "bold 12px Arial";
+                context.fillText(message, xStart + (length - 29 - (5 * message.length)) / 2, yStart - 6);
+            }
+
+
         }
 
 
