@@ -29,10 +29,10 @@ Application needs the following programs to be installed:
 Demo
 ************
 ![Choose a protocol from Casper Library](images/choose_protocol.png)
-![](images/represent_protocol.png)
-![choose_protocol](images/press_check_protocol_from_library.png)
-![choose_protocol](images/states.png)
-![choose_protocol](images/counterexample.png)
-![choose_protocol](images/fdr_top_level_trace.png)
-![choose_protocol](images/fdr_system_level_trace.png)
+![](images/protocol_representation.png)
+![](images/press_check_protocol_from_library.png)
+![](images/states.png)
+![](images/counterexample.png)
+![](images/fdr_top_level_trace.png)
+![](images/fdr_system_level_trace.png)
 
