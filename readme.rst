@@ -21,4 +21,4 @@ Application needs the following programs to be installed:
 Demo
 ************
 
-![alt text](images/choose_protocol.png "Description goes here")
+![](images/choose_protocol.png "Description goes here")
