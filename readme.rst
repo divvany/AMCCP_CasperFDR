@@ -11,7 +11,10 @@ Installation
 ************
 This app works on Linux OS only.
 Application needs the following programs to be installed: 
+
+
 -Apache  
+
 
 -PHP (version 5.6 or newer)
 
