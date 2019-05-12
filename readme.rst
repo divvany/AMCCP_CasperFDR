@@ -28,4 +28,4 @@ Application needs the following programs to be installed:
 ************
 Demo
 ************
-![image](images/choose_protocol.png)
+![  ](images/choose_protocol.png)
