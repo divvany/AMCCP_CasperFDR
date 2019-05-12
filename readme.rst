@@ -30,6 +30,3 @@ Demo
 ************
 ![choose_protocol](images/choose_protocol.png)
 
-	<p align="center">
- <img src="images/choose_protocol.png" width="350" title="hover text">
-	</p>
