@@ -41,6 +41,10 @@ Demo
 
 The counterexample after pressing "Show"
 ![](images/counterexample.png)
+
+
 ![](images/fdr_top_level_trace.png)
+
+
 ![](images/fdr_system_level_trace.png)
 
