@@ -1,11 +1,11 @@
-###################
-Automated Model Checking for Cryptographic Protocols with Casper&FDR
-###################
+
+<b>Automated Model Checking for Cryptographic Protocols with Casper&FDR</b>
 
 ************
 About
 ************
 If you use Casper and FDR directly, you must manually interpret the counterexample given by the model checking of the security protocol . This requires time and additional knowledge. Using this web platform you get a graphic representation of the counterexamples and also  information which helps you understand better the formal analysis concepts.
+
 ************
 Installation
 ************
@@ -28,5 +28,11 @@ Application needs the following programs to be installed:
 ************
 Demo
 ************
-![choose_protocol](images/choose_protocol.png)
+![Choose a protocol from Casper Library](images/choose_protocol.png)
+![](images/represent_protocol.png)
+![choose_protocol](images/press_check_protocol_from_library.png)
+![choose_protocol](images/states.png)
+![choose_protocol](images/counterexample.png)
+![choose_protocol](images/fdr_top_level_trace.png)
+![choose_protocol](images/fdr_system_level_trace.png)
 
