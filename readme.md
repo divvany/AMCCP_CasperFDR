@@ -29,9 +29,17 @@ Application needs the following programs to be installed:
 Demo
 ************
 ![Choose a protocol from Casper Library](images/choose_protocol.png)
+
+
 ![](images/protocol_representation.png)
+
+
 ![](images/press_check_protocol_from_library.png)
+
+
 ![](images/states.png)
+
+The counterexample after pressing "Show"
 ![](images/counterexample.png)
 ![](images/fdr_top_level_trace.png)
 ![](images/fdr_system_level_trace.png)
