@@ -29,3 +29,4 @@ Application needs the following programs to be installed:
 Demo
 ************
 ![choose_protocol](images/choose_protocol.png)
+ <img src="images/choose_protocol.png" width="350" title="hover text">
