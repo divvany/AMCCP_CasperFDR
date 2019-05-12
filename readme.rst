@@ -11,9 +11,9 @@ Installation
 ************
 This app works on Linux OS only.
 Application needs the following programs to be installed: 
--Apache&nbsp;
--PHP (version 5.6 or newer)<br/>
--FDR3 (https://www.cs.ox.ac.uk/projects/fdr/manual/gui/getting_started.html)<br/>
+-Apache<br />
+-PHP (version 5.6 or newer)<br />
+-FDR3 (https://www.cs.ox.ac.uk/projects/fdr/manual/gui/getting_started.html)<br />
 -Haskell 
 
 
