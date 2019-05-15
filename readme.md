@@ -27,6 +27,9 @@ Application needs the following programs to be installed:
 -Haskell 
 
 
+After downloading the files you have to run info_license.php file in your browser using server_address/info_license.php.
+
+Before that you have to replace the last two lines from input_info_fdr file with some valid data in order to obtain a fdr license.
 ************
 Demo
 ************
